@@ -32,15 +32,17 @@ export default function ProfilePage() {
   const [internshipPreferences, setInternshipPreferences] = useState<InternshipPreferencesInfo>(
     emptyInternshipPreferences
   );
+
   const [skillsAndDocuments, setSkillsAndDocuments] = useState<SkillsAndDocumentsInfo>(
     emptySkillsAndDocuments
   );
+
   const [hasProfile, setHasProfile] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "updated">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
 const [avatarFile, setAvatarFile] = useState<File | null>(null);
 const [resumeFile, setResumeFile] = useState<File | null>(null);
-
+const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (!session?.email) return;
     const existing = profileApi.get(session.email);
@@ -78,102 +80,219 @@ const [resumeFile, setResumeFile] = useState<File | null>(null);
   }
 
   async function handleSave() {
-    if (!session?.email) return;
-    setSaveError(null);
+  if (!session?.email) return;
 
-    const validationError = validateProfile();
-    if (validationError) {
-      setSaveError(validationError);
-      return;
-    }
+  setSaveError(null);
 
-    const wasNewProfile = !hasProfile;
+  const validationError = validateProfile();
 
-    const data: CandidateProfileData = {
-      personalInfo,
-      education,
-      experience,
-      internshipPreferences,
-      skillsAndDocuments,
-    };
+  if (validationError) {
+    setSaveError(validationError);
+    return;
+  }
 
-    try {
-      profileApi.save(session.email, data);
-    } catch {
-      setSaveError("Couldn't save — data may be too large for local storage.");
-      return;
-    }
+  setSaving(true);
 
-   const eduResult = await ProfileApi_real.addEducation({
-  institution: education.institution,
-  degree: education.courseOfStudy,
-  fieldOfStudy: education.courseOfStudy,
-  startDate: new Date(education.startDate).toISOString(),
-  endDate: education.currentlyInSchool
-    ? undefined
-    : education.endDate
-      ? new Date(education.endDate).toISOString()
-      : undefined,
-});
+  const wasNewProfile = !hasProfile;
 
+  try {
+    // -----------------------------------------
+    // 1. EDUCATION
+    // -----------------------------------------
+    const eduResult = await ProfileApi_real.addEducation({
+      institution: education.institution,
+      degree: education.courseOfStudy,
+      fieldOfStudy: education.courseOfStudy,
+      startDate: new Date(education.startDate).toISOString(),
+      endDate: education.currentlyInSchool
+        ? undefined
+        : education.endDate
+          ? new Date(education.endDate).toISOString()
+          : undefined,
+    });
+
+    // -----------------------------------------
+    // 2. EXPERIENCE
+    // -----------------------------------------
     let expResult;
+
     if (experience.hasInternship) {
       expResult = await ProfileApi_real.addExperience({
         company: experience.company,
         role: experience.role,
-        startDate: new Date(experience.startDate).toISOString(),
+        startDate: new Date(
+          experience.startDate
+        ).toISOString(),
       });
     }
 
-   const personalResult = await ProfileApi_real.updatePersonalInfo({
-  professionalTitle: personalInfo.professionalTitle,
-  bio: personalInfo.bio,
-  location: personalInfo.location,
-  profileImage: avatarFile,
-  phoneNumber:personalInfo.whatsapp,
-  age:personalInfo.age,
+    // -----------------------------------------
+    // 3. PERSONAL INFO
+    // -----------------------------------------
+    const personalResult =
+      await ProfileApi_real.updatePersonalInfo({
+        professionalTitle: personalInfo.professionalTitle,
+        bio: personalInfo.bio,
+        location: personalInfo.location,
+        profileImage: avatarFile,
+        phoneNumber: personalInfo.whatsapp,
+        age: personalInfo.age,
+      });
 
-});
-const prefsResult = await ProfileApi_real.updateEmploymentPreferences({
-  preferredJobType: internshipPreferences.preferredJobType,
-  preferredLocation: internshipPreferences.preferredLocation,
-  expectedSalary: internshipPreferences.expectedSalary,
-  availability: internshipPreferences.availability,
-});
+    // -----------------------------------------
+    // 4. EMPLOYMENT PREFERENCES
+    // -----------------------------------------
+    const prefsResult =
+      await ProfileApi_real.updateEmploymentPreferences({
+        preferredJobType:
+          internshipPreferences.preferredJobType,
+        preferredLocation:
+          internshipPreferences.preferredLocation,
+        expectedSalary:
+          internshipPreferences.expectedSalary,
+        availability:
+          internshipPreferences.availability,
+      });
 
-const realSkills = skillsAndDocuments.skills.filter((s) => s.trim() !== "");
-const skillsResult = await ProfileApi_real.updateSkills({
-  skills: realSkills,
-  certifications: skillsAndDocuments.certifications,
-  portfolioUrl: skillsAndDocuments.portfolioLink,
-  resume: resumeFile,
-});
-    // Capture completion status from whichever response actually included it —
-    // check them in this order and use the first one found, since we don't
-    // yet know for certain which endpoint returns it.
-    
-    const results = [skillsResult, personalResult, prefsResult, expResult, eduResult].filter(Boolean);
-    const withCompletion = results.find((r) => r?.ok && r.profilePercent !== undefined);
+    // -----------------------------------------
+    // 5. SKILLS + RESUME
+    // -----------------------------------------
+    const realSkills = skillsAndDocuments.skills.filter(
+      (s) => s.trim() !== ""
+    );
+
+    const skillsResult =
+      await ProfileApi_real.updateSkills({
+        skills: realSkills,
+        certifications:
+          skillsAndDocuments.certifications,
+        portfolioUrl:
+          skillsAndDocuments.portfolioLink,
+        resume: resumeFile,
+      });
+
+    // -----------------------------------------
+    // 6. UPDATE RESUME URL
+    // -----------------------------------------
+    let finalSkillsAndDocuments =
+      skillsAndDocuments;
+
+    if (skillsResult.ok && skillsResult.resumeUrl) {
+      finalSkillsAndDocuments = {
+        ...skillsAndDocuments,
+        resumeUrl: skillsResult.resumeUrl,
+        resumeFileName: resumeFile?.name ?? skillsAndDocuments.resumeFileName,
+      };
+
+      setSkillsAndDocuments(finalSkillsAndDocuments);
+
+      // The important part:
+      // Save the returned resumeUrl to localStorage
+      console.log(
+        "Resume saved:",
+        skillsResult.resumeUrl
+      );
+    }
+
+    // -----------------------------------------
+    // 7. SAVE COMPLETE PROFILE LOCALLY
+    // -----------------------------------------
+    const finalProfile: CandidateProfileData = {
+      personalInfo,
+      education,
+      experience,
+      internshipPreferences,
+      skillsAndDocuments: finalSkillsAndDocuments,
+    };
+
+    profileApi.save(
+      session.email,
+      finalProfile
+    );
+
+    console.log(
+      "Profile saved to localStorage:",
+      finalProfile
+    );
+
+    // -----------------------------------------
+    // 8. PROFILE COMPLETION
+    // -----------------------------------------
+    const results = [
+      skillsResult,
+      personalResult,
+      prefsResult,
+      expResult,
+      eduResult,
+    ].filter(Boolean);
+
+    const withCompletion = results.find(
+      (r) =>
+        r?.ok &&
+        r.profilePercent !== undefined
+    );
+
 
     if (withCompletion?.ok) {
-      profileCompletionApi.set(session.email, {
-        profilePercent: withCompletion.profilePercent ?? 0,
-        isComplete: withCompletion.isComplete ?? false,
-      });
+      profileCompletionApi.set(
+        session.email,
+        {
+          profilePercent:
+            withCompletion.profilePercent ?? 0,
+          isComplete:
+            withCompletion.isComplete ?? false,
+        }
+      );
     }
 
-    notificationsApi.add(session.email, "Your profile was updated");
+    // -----------------------------------------
+    // 9. NOTIFICATION
+    // -----------------------------------------
+    notificationsApi.add(
+      session.email,
+      "Your profile was updated"
+    );
 
+    // -----------------------------------------
+    // 10. UPDATE SESSION
+    // -----------------------------------------
     sessionStore.set({
       ...session,
-      displayName: personalInfo.fullName || session.displayName,
+      displayName:
+        personalInfo.fullName ||
+        session.displayName,
       avatarUrl: personalInfo.avatarUrl,
     });
 
+    // -----------------------------------------
+    // 11. FINISH
+    // -----------------------------------------
     setHasProfile(true);
-    setSaveStatus(wasNewProfile ? "saved" : "updated");
-    setTimeout(() => setSaveStatus("idle"), 2000);
+
+    setSaveStatus(
+      wasNewProfile ? "saved" : "updated"
+    );
+
+    setResumeFile(null);
+    setAvatarFile(null);
+
+    setTimeout(() => {
+      setSaveStatus("idle");
+    }, 2000);
+
+  } catch (error) {
+    console.error(
+      "Profile save error:",
+      error
+    );
+
+    setSaveError(
+      "Something went wrong while saving your profile."
+    );
+  } finally {
+    setSaving(false);
   }
+}
 
   const buttonLabel =
     saveStatus === "saved" ? "Saved ✓" : saveStatus === "updated" ? "Updated ✓" : hasProfile ? "Update" : "Save changes";
@@ -205,12 +324,20 @@ const skillsResult = await ProfileApi_real.updateSkills({
           </span>
         )}
         <button
-          type="button"
-          onClick={handleSave}
-          className="rounded-full bg-[#8A38F5] px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-purple-200 transition-colors hover:bg-[#7226e0] sm:px-6 sm:py-3 sm:text-sm"
-        >
-          {buttonLabel}
-        </button>
+  type="button"
+  onClick={handleSave}
+  disabled={saving}
+  className="rounded-full bg-[#8A38F5] px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-purple-200 transition-colors hover:bg-[#7226e0] disabled:cursor-not-allowed disabled:opacity-60 sm:px-6 sm:py-3 sm:text-sm"
+>
+  {saving ? (
+    <span className="flex items-center gap-2">
+      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+      Saving…
+    </span>
+  ) : (
+    buttonLabel
+  )}
+</button>
       </div>
     </div>
   );

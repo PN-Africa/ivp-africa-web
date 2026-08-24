@@ -6,9 +6,9 @@ import Link from "next/link";
 import { ArrowLeft, Check, FileText, AlertCircle, MessageCircle } from "lucide-react";
 import { talentJobsApi, type TalentJob } from "@/lib/utils/talentJobs";
 import { useSession } from "@/lib/auth/useSession";
-import { applicationsApi, savedJobsApi } from "@/lib/api/applications";
-import { profileApi } from "@/lib/api/profile";
-import { messagesApi } from "@/lib/api/message";
+import { jobsApi } from "@/lib/api/jobs";import { profileApi } from "@/lib/api/profile";
+import { messageApi_Real } from "@/lib/api/message";
+import { applicationsApi_Real } from "@/lib/api/applications";
 import { profileCompletionApi } from "@/lib/api/profileCompletion";
 const statusBadgeStyles: Record<"filled" | "flagged", string> = {
   filled: "bg-gray-100 text-gray-500",
@@ -29,46 +29,71 @@ const jobId = params?.id;
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [applicationId, setApplicationId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const completion = session?.email ? profileCompletionApi.get(session.email) : { profilePercent: 0, isComplete: false };
+
  useEffect(() => {
   if (!jobId) return;
   talentJobsApi.getById(jobId).then(setJob);
 }, [jobId]);
 
-  useEffect(() => {
-    if (!session?.email || !job) return;
-    setApplied(applicationsApi.isApplied(session.email, job.id));
-    setSaved(savedJobsApi.isSaved(session.email, job.id));
-  }, [session?.email, job?.id]);
+useEffect(() => {
+  if (!session?.email || !job) return;
+
+  applicationsApi_Real.getApplication().then((result) => {
+    console.log("getApplication result:", result);
+    if (result.ok) {
+      const match = result.applications.find((a)=> a.jobId === job.id );
+
+      setApplied(!!match);
+      setApplicationId(match?.id ?? null)
+    }
+  });
+
+  jobsApi.getSavedJobs().then((result) => {
+    if (result.ok) {
+      setSaved(result.jobs.some((j) => j.id === job.id));
+    }
+  });
+}, [session?.email, job?.id]);
 
   if (!job) {
     return <p className="text-sm text-gray-400">Job not found.</p>;
   }
 
  const resumeUrl = session?.email ? profileApi.get(session.email)?.skillsAndDocuments?.resumeUrl : null;
-  function handleConfirmApply() {
+  
+ 
+async function handleConfirmApply() {
     if (!session?.email || !job) return;
-    applicationsApi.apply(
-      session.email,
-      { id: job.id, title: job.title, company: job.company, location: job.location },
-      resumeUrl ?? undefined,
-      job.employerEmail, // only set for real employer-posted jobs — enables exact matching on their dashboard
-    );
-    setApplied(true);
-    setShowConfirm(false);
+
+    const result = await  jobsApi.apply(job.id);
+    if(result.ok) {
+      setApplied(true);
+      setShowConfirm(false);
+    }else{
+      console.error("Apply failed:", result.message);
+    }
   }
 
-  function handleToggleSave() {
-    if (!session?.email || !job) return;
-    const nowSaved = savedJobsApi.toggle(session.email, { id: job.id, title: job.title, company: job.company, location: job.location });
-    setSaved(nowSaved);
+  async function handleToggleSave() {
+  if (!session?.email || !job) return;
+  if (saved) {
+    const result = await jobsApi.removeSavedJob(job.id);
+    if (result.ok) setSaved(false);
+  } else {
+    const result = await jobsApi.saveJob(job.id);
+    if (result.ok) setSaved(true);
   }
-
+}
   function handleMessageEmployer() {
-    if (!session?.email || !job) return;
-    const conversation = messagesApi.getOrCreateForJob(session.email, { id: job.id, company: job.company, title: job.title, initial: job.initial });
-    router.push(`/talent/messages?conversation=${conversation.id}`);
+  if (!applicationId || !job) return;
+  const params = new URLSearchParams({
+    newApplicationId: applicationId,
+    employerName: job.company,
+  });
+  router.push(`/talent/messages?${params.toString()}`);  
   }
 
   return (
@@ -135,7 +160,7 @@ const jobId = params?.id;
       ) : applied ? (
         <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 py-3 text-sm font-semibold text-green-700">
           <Check size={16} />
-          Application submitted
+          Applied
         </div>
       ) : (
         <button type="button" onClick={() => setShowConfirm(true)} className="w-full rounded-xl bg-[#8A38F5] py-3 text-sm font-semibold text-white transition-colors hover:bg-[#7226e0]">
@@ -148,10 +173,15 @@ const jobId = params?.id;
               </button>
             )}
 
-            <button type="button" onClick={handleMessageEmployer} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-50">
-              <MessageCircle size={16} />
-              Message employer
-            </button>
+           <button
+            type="button"
+            onClick={handleMessageEmployer}
+            disabled={!applicationId}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <MessageCircle size={16} />
+            {applicationId ? "Message employer" : "Apply to message employer"}
+          </button>
 
             <div className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-5 text-sm">
               <div className="flex justify-between">
