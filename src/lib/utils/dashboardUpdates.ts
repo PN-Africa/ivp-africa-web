@@ -1,26 +1,25 @@
-import { jobs } from "@/app/(talent)/talent/jobs/job";
+import { talentJobsApi } from "@/lib/utils/talentJobs";
 import { notificationsApi } from "@/lib/api/notification";
 
 export interface UpdateItem {
   id: string;
   title: string;
   description: string;
-  timestamp: string; // ISO date, used for sorting only
+  timestamp: string;
 }
 
-export function getLatestUpdates(email: string, limit = 4): UpdateItem[] {
-  // Source 1: real notifications (applying, messaging, profile saves, etc.)
+export async function getLatestUpdates(email: string, limit = 4): Promise<UpdateItem[]> {
   const fromNotifications: UpdateItem[] = notificationsApi.getAll(email).map((n) => ({
     id: n.id,
     title: n.message,
-    description: "", // notifications are single-line; no separate description available
+    description: "",
     timestamp: n.createdAt,
   }));
 
-  // Source 2: newest job postings — approximate a real timestamp from postedDaysAgo
-  // since job.ts only stores a relative day count, not an actual date
-  const fromJobs: UpdateItem[] = jobs
-    .filter((job) => job.postedDaysAgo <= 5) // only genuinely "recent" postings
+  const allJobs = await talentJobsApi.getAll();
+
+  const fromJobs: UpdateItem[] = allJobs
+    .filter((job) => job.postedDaysAgo <= 5)
     .map((job) => ({
       id: `job-${job.id}`,
       title: `New job: ${job.title}`,
