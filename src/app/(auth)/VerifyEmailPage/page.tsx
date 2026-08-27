@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSearchParams,  useRouter} from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { realAuthApi } from "@/lib/api/client";
 import Link from "next/link";
 
-export default function VerifyEmailPage() {
-  const searchParams= useSearchParams();
+function VerifyEmailContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  
+
   const token = searchParams?.get("token");
-  
+
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -25,7 +25,6 @@ export default function VerifyEmailPage() {
       const result = await realAuthApi.verifyEmail(token!);
       if (result.ok) {
         setStatus("success");
-        // Automatically redirect to login page after 3 seconds
         setTimeout(() => router.push("/login"), 3000);
       } else {
         setStatus("error");
@@ -39,7 +38,7 @@ export default function VerifyEmailPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-4">
       {status === "loading" && <p>Verifying your email, please wait...</p>}
-      
+
       {status === "success" && (
         <div className="text-center">
           <h2 className="text-2xl font-bold text-green-600">Email Verified!</h2>
@@ -60,5 +59,19 @@ export default function VerifyEmailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center px-4">
+          <p>Loading…</p>
+        </div>
+      }
+    >
+      <VerifyEmailContent />
+    </Suspense>
   );
 }

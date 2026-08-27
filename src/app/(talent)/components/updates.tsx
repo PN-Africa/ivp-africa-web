@@ -7,11 +7,17 @@ import { getLatestUpdates, type UpdateItem } from "@/lib/utils/dashboardUpdates"
 export function LatestUpdates() {
   const { session } = useSession();
   const [updates, setUpdates] = useState<UpdateItem[]>([]);
+useEffect(() => {
+  if (!session?.email) return;
+  const email = session.email;
 
-  useEffect(() => {
-    if (!session?.email) return;
-    setUpdates(getLatestUpdates(session.email));
-  }, [session?.email]);
+  async function loadUpdates() {
+    const items = await getLatestUpdates(email);
+    setUpdates(items);
+  }
+
+  loadUpdates();
+}, [session?.email]);
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 transition-shadow duration-200 hover:shadow-md sm:p-6">

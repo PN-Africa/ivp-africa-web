@@ -17,29 +17,20 @@ export default function SubscriptionPage() {
   const [activeJobCount, setActiveJobCount] = useState(0);
   const [showPlanList, setShowPlanList] = useState(false);
 
-  async function refresh() {
-    if (!session?.email) return;
+async function refresh() {
+  if (!session?.email) return;
 
-    try {
-      // 1. Await the subscription fetch
-      const subRes = await subscriptionApi.get(session.email);
-      // Safely set state depending on your API's response structure
-      setState(subRes.data ? subRes.data : subRes);
+  try {
+    const subRes = await subscriptionApi.get(session.email);
+    setState(subRes);
 
-      // 2. Await the jobs fetch
-      const jobsRes = await employerJobsApi.getAll(session.email);
-      
-      // 3. Safely extract the array and filter
-      const jobsArray = Array.isArray(jobsRes.data) 
-        ? jobsRes.data 
-        : (Array.isArray(jobsRes) ? jobsRes : []);
-        
-      setActiveJobCount(jobsArray.filter((j) => j.status === "active").length);
-    } catch (error) {
-      console.error("Failed to refresh subscription data:", error);
-    }
+    const jobsRes = await employerJobsApi.getAll();
+    const jobsArray = jobsRes.ok && jobsRes.data ? jobsRes.data : [];
+    setActiveJobCount(jobsArray.filter((j) => j.status === "active").length);
+  } catch (error) {
+    console.error("Failed to refresh subscription data:", error);
   }
-
+}
   useEffect(() => {
     refresh();
   }, [session?.email]);

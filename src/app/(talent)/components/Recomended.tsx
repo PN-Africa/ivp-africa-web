@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,17 +6,23 @@ import Link from "next/link";
 import { useSession } from "@/lib/auth/useSession";
 import { profileApi } from "@/lib/api/profile";
 import { getRecommendedJobs } from "@/lib/utils/recommendations";
-import type { Job } from "@/app/(talent)/talent/jobs/job";
+import type { TalentJob } from "@/lib/utils/talentJobs";
 
 export function RecommendedForYou() {
   const { session } = useSession();
-  const [recommendedJobs, setRecommendedJobs] = useState<Job[]>([]);
+  const [recommendedJobs, setRecommendedJobs] = useState<TalentJob[]>([]);
+useEffect(() => {
+  if (!session?.email) return;
+  const email = session.email;
 
-  useEffect(() => {
-    if (!session?.email) return;
-    const profile = profileApi.get(session.email);
-    setRecommendedJobs(getRecommendedJobs(profile));
-  }, [session?.email]);
+  async function loadRecommended() {
+    const profile = profileApi.get(email);
+    const jobs = await getRecommendedJobs(profile);
+    setRecommendedJobs(jobs);
+  }
+
+  loadRecommended();
+}, [session?.email]);
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-shadow duration-200 hover:shadow-md sm:p-6">
