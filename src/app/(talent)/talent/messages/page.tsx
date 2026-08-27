@@ -4,12 +4,17 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Send, ArrowLeft, Trash2 } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
-import { messageApi_Real, } from "@/lib/api/message";
-import { type RealConversation, type RealMessage   } from "@/lib/types/message";
+import { messageApi_Real } from "@/lib/api/message";
+import { type RealConversation, type RealMessage } from "@/lib/types/message";
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+// Simple repeating dot-grid pattern, encoded as a data URI so no extra
+// asset/file is needed. Adjust `fill` opacity or spacing to taste.
+const CHAT_BG_PATTERN =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='none' stroke='%238A38F5' stroke-width='1.5' stroke-opacity='0.18'%3E%3Cpath d='M30 20v20M20 30h20'/%3E%3C/g%3E%3C/svg%3E";
 function MessagesContent() {
   const { session } = useSession();
   const searchParams = useSearchParams();
@@ -39,27 +44,27 @@ function MessagesContent() {
         setLoadError(result.message);
       }
       setLoading(false);
-      setInitialLoad(false)
+      setInitialLoad(false);
     });
   }
 
   useEffect(() => {
     refreshConversations();
   }, [session?.email]);
+
   useEffect(() => {
-    console.log("draft effect running:", { newApplicationId, loading, conversationsCount: conversations.length });
-  if (!newApplicationId) return;
-  const existing = conversations.find((c) => c.applicationId === newApplicationId);
-  if (existing) {
-    setActiveId(existing.id);
-    setIsDraft(false);
-    setMobileView("chat");
-  } else if (!loading) {
-    setIsDraft(true);
-    setActiveId(null);
-    setMobileView("chat");
-  }
-}, [newApplicationId, conversations, loading]);
+    if (!newApplicationId) return;
+    const existing = conversations.find((c) => c.applicationId === newApplicationId);
+    if (existing) {
+      setActiveId(existing.id);
+      setIsDraft(false);
+      setMobileView("chat");
+    } else if (!loading) {
+      setIsDraft(true);
+      setActiveId(null);
+      setMobileView("chat");
+    }
+  }, [newApplicationId, conversations, loading]);
 
   useEffect(() => {
     if (conversations.length === 0 || activeId) return;
@@ -90,29 +95,29 @@ function MessagesContent() {
   }
 
   async function handleSend() {
-  if (!draft.trim()) return;
+    if (!draft.trim()) return;
 
-  if (isDraft && newApplicationId) {
+    if (isDraft && newApplicationId) {
+      setSending(true);
+      const result = await messageApi_Real.sendMessage(newApplicationId, draft.trim());
+      setSending(false);
+      if (result.ok) {
+        setDraft("");
+        setIsDraft(false);
+        refreshConversations();
+      }
+      return;
+    }
+
+    if (!activeConversation?.applicationId) return;
     setSending(true);
-    const result = await messageApi_Real.sendMessage(newApplicationId, draft.trim());
+    const result = await messageApi_Real.sendMessage(activeConversation.applicationId, draft.trim());
     setSending(false);
     if (result.ok) {
       setDraft("");
-      setIsDraft(false);
-      refreshConversations(); // will pick up the new conversation via the useEffect above
+      refreshMessages();
     }
-    return;
   }
-
-  if (!activeConversation?.applicationId) return;
-  setSending(true);
-  const result = await messageApi_Real.sendMessage(activeConversation.applicationId, draft.trim());
-  setSending(false);
-  if (result.ok) {
-    setDraft("");
-    refreshMessages();
-  }
-}
 
   async function handleDelete(conv: RealConversation) {
     const result = await messageApi_Real.deleteConversation(conv.id);
@@ -130,7 +135,7 @@ function MessagesContent() {
     );
   }
 
-  if (loadError || conversations.length === 0 && !isDraft) {
+  if (loadError || (conversations.length === 0 && !isDraft)) {
     return (
       <div className="flex h-[calc(100vh-8rem)] flex-col items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-6 text-center">
         <p className="text-sm text-gray-400">
@@ -159,7 +164,7 @@ function MessagesContent() {
             </div>
           </div>
         )}
-              {conversations.map((conv) => (
+        {conversations.map((conv) => (
           <button
             key={conv.id}
             type="button"
@@ -180,80 +185,92 @@ function MessagesContent() {
       </div>
 
       <div className={`flex flex-1 flex-col ${mobileView === "chat" ? "flex" : "hidden sm:flex"}`}>
-
         {activeConversation || isDraft ? (
-  <>
-    <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 sm:px-6 sm:py-4">
-      <div className="flex min-w-0 items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setMobileView("list")}
-          className="text-gray-400 hover:text-gray-600 sm:hidden"
-          aria-label="Back to conversations"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <p className="truncate text-sm font-bold text-gray-900 sm:text-base">
-          {isDraft ? employerNameParam ?? "New conversation" : activeConversation!.otherPartyName}
-        </p>
-      </div>
-      {!isDraft && (
-        <button
-          type="button"
-          onClick={() => handleDelete(activeConversation!)}
-          aria-label="Delete conversation"
-          className="shrink-0 text-gray-400 hover:text-red-500"
-        >
-          <Trash2 size={16} />
-        </button>
-      )}
-    </div>
-
-    <div className="flex-1 overflow-y-auto bg-gray-50 px-4 py-4 sm:px-6 sm:py-6">
-      {isDraft || messages.length === 0 ? (
-        <p className="text-center text-sm text-gray-400">No messages yet.</p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.senderId === session?.email ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm sm:max-w-md ${
-                msg.senderId === session?.email ? "bg-[#8A38F5] text-white" : "bg-white text-gray-800"
-              }`}>
-                <p>{msg.content}</p>
-                <p className={`mt-1 text-[10px] ${msg.senderId === session?.email ? "text-white/70" : "text-gray-400"}`}>
-                  {formatTime(msg.createdAt)}
+          <>
+            <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 sm:px-6 sm:py-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileView("list")}
+                  className="text-gray-400 hover:text-gray-600 sm:hidden"
+                  aria-label="Back to conversations"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <p className="truncate text-sm font-bold text-gray-900 sm:text-base">
+                  {isDraft ? employerNameParam ?? "New conversation" : activeConversation!.otherPartyName}
                 </p>
               </div>
+              {!isDraft && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(activeConversation!)}
+                  aria-label="Delete conversation"
+                  className="shrink-0 text-gray-400 hover:text-red-500"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
 
-    <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-3 sm:px-6 sm:py-4">
-      <input
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSend()}
-        placeholder="Write a message..."
-        className="min-w-0 flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#8A38F5]"
-      />
-      <button
-        type="button"
-        onClick={handleSend}
-        disabled={sending || !draft.trim()}
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#8A38F5] text-white transition-colors hover:bg-[#7226e0] disabled:opacity-50 sm:h-11 sm:w-11"
-      >
-        <Send size={16} className="sm:size-[18px]" />
-      </button>
-    </div>
-  </>
-) : (
-  <div className="flex flex-1 items-center justify-center">
-    <p className="text-sm text-gray-400">Select a conversation to start messaging.</p>
-  </div>
-)}
+            <div
+              className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6"
+              style={{
+                backgroundColor: "#F9FAFB",
+                backgroundImage: `url("${CHAT_BG_PATTERN}")`,
+                backgroundRepeat: "repeat",
+              }}
+            >
+              {isDraft || messages.length === 0 ? (
+                <p className="text-center text-sm text-gray-400">No messages yet.</p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {messages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.senderId === session?.id ? "justify-end" : "justify-start"}`}>
+                      <div
+                        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm shadow-sm sm:max-w-md ${
+                          msg.senderId === session?.id ? "bg-[#8A38F5] text-white" : "bg-white text-gray-800"
+                        }`}
+                      >
+                        <p>{msg.content}</p>
+                        <p
+                          className={`mt-1 text-[10px] ${
+                            msg.senderId === session?.id ? "text-white/70" : "text-gray-400"
+                          }`}
+                        >
+                          {formatTime(msg.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 border-t border-gray-100 px-3 py-3 sm:px-6 sm:py-4">
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                placeholder="Write a message..."
+                className="min-w-0 flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#8A38F5]"
+              />
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={sending || !draft.trim()}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#8A38F5] text-white transition-colors hover:bg-[#7226e0] disabled:opacity-50 sm:h-11 sm:w-11"
+              >
+                <Send size={16} className="sm:size-[18px]" />
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-gray-400">Select a conversation to start messaging.</p>
+          </div>
+        )}
       </div>
     </div>
   );
