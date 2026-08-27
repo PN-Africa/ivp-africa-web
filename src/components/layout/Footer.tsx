@@ -108,7 +108,7 @@ const Footer: React.FC = () => {
                 type="submit"
                 variant="secondary"
                 loading={isLoading}
-                className="w-full sm:w-auto"
+                className="w-full text-white border-white hover:text-white sm:w-auto"
               >
                 Subscribe
               </Button>

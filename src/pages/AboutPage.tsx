@@ -21,9 +21,9 @@ const AboutPage: React.FC = () => {
       description: 'Built our core verification infrastructure and successfully piloted placements with top enterprise employers across the continent.',
     },
     {
-      year: 'January 2025',
+      year: 'January 2026',
       title: 'Platform Evolution',
-      company: 'VYRE.AFRICA',
+      company: 'IVP Africa',
       description: 'Official reopening and launch of IVP V2 with advanced matching algorithms, enhanced verification, and seamless enterprise tools.',
     },
   ];
@@ -91,17 +91,17 @@ const AboutPage: React.FC = () => {
               
               <div className="flex flex-col sm:flex-row gap-4">
                 <Button
-                  href={CONTACT_INFO.serviceFormUrl}
+                  href="/signUp"
                   external
                   variant="primary"
-                  className="bg-black text-white hover:bg-transparent hover:text-white px-8 py-4 shadow-lg hover:shadow-xl transition-all"
+                  className="bg-black text-black hover:bg-transparent px-8 py-4 shadow-lg hover:shadow-xl transition-all"
                 >
                   I'm looking for a job
                 </Button>
                 <Button 
-                  href="/portfolio" 
+                  href="/signUp" 
                   variant="outline"
-                  className="px-8 py-4 hover:text-white hover:bg-gray-50 transition-all shadow-lg"
+                  className="px-8 py-4 hover:bg-gray-50 transition-all shadow-lg"
                 >
                   I'm hiring talent
                 </Button>
@@ -294,11 +294,11 @@ const AboutPage: React.FC = () => {
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Button
-                href={CONTACT_INFO.serviceFormUrl}
+                href="/signUp"
                 external
                 variant="secondary"
                 size="lg"
-                className="bg-white text-primary hover:text-white px-10 shadow-xl"
+                className="bg-white text-white border-white px-10 shadow-xl"
               >
                 Get Started Today
               </Button>

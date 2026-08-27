@@ -1,86 +1,74 @@
-export interface EmployerMessage {
+import { apiFetch } from "@/lib/api/httpClient";
+import { session } from "@/lib/auth/session";
+
+// ============================================================================
+// 1. REAL API (Used by your new live employer/messages/page.tsx)
+// ============================================================================
+
+export interface RealConversation {
   id: string;
-  sender: "me" | "candidate";
-  text: string;
-  sentAt: string;
-  attachmentName?: string;
-  attachmentUrl?: string; // base64
+  applicationId: string;
+  participantName: string;
+  participantAvatar: string | null;
+  lastMessage?: {
+    id: string;
+    content: string;
+    createdAt: string;
+  };
+  unreadCount: number;
+  updatedAt: string;
 }
 
-export interface EmployerConversation {
-  candidateId: string;
-  messages: EmployerMessage[];
+export interface RealMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
-const PREFIX = "ivp_employer_messages_";
-
-function keyFor(email: string) {
-  return PREFIX + email.toLowerCase();
+function authHeaders(): HeadersInit {
+  const current = session.get();
+  return current?.accessToken ? { Authorization: `Bearer ${current.accessToken}` } : {};
 }
 
-function readConversations(email: string): EmployerConversation[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(keyFor(email)) ?? "[]");
-  } catch {
-    return [];
-  }
-}
-
-function writeConversations(email: string, conversations: EmployerConversation[]) {
-  localStorage.setItem(keyFor(email), JSON.stringify(conversations));
-}
-
-// Seeded once so the reference conversation (Chinedu Okafor) has real content to show.
-function seedFor(candidateId: string): EmployerMessage[] {
-  const now = Date.now();
-  return [
-    { id: crypto.randomUUID(), sender: "candidate", text: "Hello TechNova team! I received the coding test. I wanted to ask how much time is allocated for submission?", sentAt: new Date(now - 15 * 60_000).toISOString() },
-    { id: crypto.randomUUID(), sender: "me", text: "Hi Chinedu! The challenge is designed to take about 3 hours, but we leave the deadline open for 4 days so you can work on it comfortably.", sentAt: new Date(now - 12 * 60_000).toISOString() },
-    { id: crypto.randomUUID(), sender: "candidate", text: "Perfect! I will submit it by tomorrow evening. Thanks for the quick response!", sentAt: new Date(now - 10 * 60_000).toISOString() },
-  ];
-}
-
-export const employerMessagesApi = {
-  getAll(email: string): EmployerConversation[] {
-    return readConversations(email);
+export const messageApi = {
+  // A: Send a Message
+  sendMessage: async (content: string, params: { conversationId?: string; applicationId?: string }) => {
+    const res = await apiFetch<RealMessage>("/api/v1/messaging/send", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ content, ...params }),
+    });
+    return res; 
   },
 
-  getForCandidate(email: string, candidateId: string, seedIfFirst = false): EmployerConversation {
-    const conversations = readConversations(email);
-    const existing = conversations.find((c) => c.candidateId === candidateId);
-    if (existing) return existing;
-
-    const fresh: EmployerConversation = {
-      candidateId,
-      messages: seedIfFirst ? seedFor(candidateId) : [],
-    };
-    writeConversations(email, [...conversations, fresh]);
-    return fresh;
+  // B: Get Conversations (Inbox list)
+  getConversations: async (search?: string) => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const res = await apiFetch<RealConversation[]>(`/api/v1/messaging/conversations${query}`, {
+      method: "GET",
+      headers: authHeaders(),
+    });
+    return res; 
   },
 
-  sendMessage(
-    email: string,
-    candidateId: string,
-    text: string,
-    attachment?: { name: string; dataUrl: string }
-  ) {
-    const conversations = readConversations(email);
-    const message: EmployerMessage = {
-      id: crypto.randomUUID(),
-      sender: "me",
-      text,
-      sentAt: new Date().toISOString(),
-      attachmentName: attachment?.name,
-      attachmentUrl: attachment?.dataUrl,
-    };
+  // C: Get Conversation Messages (History)
+  getMessages: async (conversationId: string) => {
+    const res = await apiFetch<RealMessage[]>(`/api/v1/messaging/conversations/${conversationId}/messages`, {
+      method: "GET",
+      headers: authHeaders(),
+    });
+    return res;
+  },
 
-    const existing = conversations.find((c) => c.candidateId === candidateId);
-    if (existing) {
-      existing.messages.push(message);
-      writeConversations(email, conversations);
-    } else {
-      writeConversations(email, [...conversations, { candidateId, messages: [message] }]);
-    }
+  // D: Delete / Archive Conversation
+  deleteConversation: async (conversationId: string) => {
+    const res = await apiFetch<{ message: string }>(`/api/v1/messaging/conversations/${conversationId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    return res;
   },
 };

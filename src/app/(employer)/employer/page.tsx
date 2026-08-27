@@ -6,13 +6,12 @@ import { Plus } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import { useSession } from "@/lib/auth/useSession";
 import { employerJobsApi } from "@/lib/api/employerJob";
-import { adminUsersApi } from "@/lib/api/adminUsers";
-import { applicationsApi } from "@/lib/api/applications";
-import { companyProfileApi } from "@/lib/api/companyProfile";
+import { employerCandidatesApi, type EmployerCandidate } from "@/lib/api/candidate";
 import type { EmployerJob } from "@/lib/api/employerJob";
-import type { ApplicationRecord } from "@/lib/types/application";
 
-const statusStyles: Record<ApplicationRecord["status"], string> = {
+type StageKey = "applied" | "shortlisted" | "interview" | "rejected" | "hired";
+
+const statusStyles: Record<StageKey, string> = {
   applied: "bg-gray-100 text-gray-600",
   shortlisted: "bg-[#EDE7F8] text-[#8A38F5]",
   interview: "bg-blue-50 text-blue-700",
@@ -20,7 +19,7 @@ const statusStyles: Record<ApplicationRecord["status"], string> = {
   hired: "bg-green-50 text-green-700",
 };
 
-const funnelColors: Record<ApplicationRecord["status"], string> = {
+const funnelColors: Record<StageKey, string> = {
   applied: "#9CA3AF",
   shortlisted: "#8A38F5",
   interview: "#3B82F6",
@@ -28,65 +27,78 @@ const funnelColors: Record<ApplicationRecord["status"], string> = {
   hired: "#22C55E",
 };
 
+function getCandidateStageKey(candidate: EmployerCandidate): StageKey {
+  const stage = (candidate.stage || candidate.status || "").toLowerCase();
+  if (stage.includes("hire") || stage.includes("accept")) return "hired";
+  if (stage.includes("interv")) return "interview";
+  if (stage.includes("short")) return "shortlisted";
+  if (stage.includes("reject")) return "rejected";
+  return "applied";
+}
+
 export default function EmployerDashboardPage() {
   const { session } = useSession();
   const [jobs, setJobs] = useState<EmployerJob[]>([]);
-  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-  async function loadDashboardData() {
-    if (!session?.email) return;
-    
-    // 1. Fetch the real company profile asynchronously
-    const profileRes = await companyProfileApi.getProfile();
-    
-    // 2. Extract the company name (fallback to session display name if it fails)
-    const companyName = (
-      profileRes.ok && profileRes.data?.companyName 
-        ? profileRes.data.companyName 
-        : (session.displayName ?? "")
-    ).trim().toLowerCase();
+    async function loadDashboard() {
+      const token = session?.accessToken || session?.accessToken;
+      if (!token) return;
 
-    const allTalent = adminUsersApi.getAll().filter((u) => u.role === "talent");
-    
-    // ... continue with the rest of your filtering logic here using `companyName` ...
-    // (e.g., setStats, setRecentApplicants, etc.)
-  }
+      setLoading(true);
 
-  loadDashboardData();
-}, [session]);
+      const [jobsRes, candidatesList] = await Promise.all([
+        employerJobsApi.getAll(),
+        employerCandidatesApi.getAll(token),
+      ]);
 
-  const firstName = session?.displayName?.split(" ")[0] ?? "there";
+      if (jobsRes.ok && jobsRes.data) {
+        setJobs(jobsRes.data);
+      }
 
+      setCandidates(candidatesList);
+      setLoading(false);
+    }
+
+    loadDashboard();
+  }, [session]);
+
+  const firstName = session?.displayName?.split(" ")[0] || "Employer";
+
+  // Dynamic calculations across candidates and jobs
+  const totalApplicants = candidates.length;
+  const interviewCount = candidates.filter((c) => getCandidateStageKey(c) === "interview").length;
+  const hiredCount = candidates.filter((c) => getCandidateStageKey(c) === "hired").length;
   const activeJobCount = jobs.filter((j) => j.status === "active").length;
-  const interviewCount = applications.filter((a) => a.status === "interview").length;
-  const hiredCount = applications.filter((a) => a.status === "hired").length;
 
   const stats = [
     { label: "Active Jobs", value: activeJobCount, dot: "bg-[#8A38F5]" },
-    { label: "Applicants", value: applications.length, dot: "bg-blue-500" },
+    { label: "Applicants", value: totalApplicants, dot: "bg-blue-500" },
     { label: "Interviews", value: interviewCount, dot: "bg-amber-500" },
     { label: "Hires", value: hiredCount, dot: "bg-green-500" },
   ];
 
-  const recentApplications = applications.slice(0, 4);
+  const recentCandidates = candidates.slice(0, 4);
 
-  const funnelKeys: ApplicationRecord["status"][] = ["applied", "shortlisted", "interview", "hired"];
+  const funnelKeys: StageKey[] = ["applied", "shortlisted", "interview", "hired"];
   const funnelData = funnelKeys
     .map((status) => ({
       name: status.charAt(0).toUpperCase() + status.slice(1),
-      value: applications.filter((a) => a.status === status).length,
+      value: candidates.filter((c) => getCandidateStageKey(c) === status).length,
       color: funnelColors[status],
     }))
     .filter((d) => d.value > 0);
-  const funnelTotal = applications.length;
+
+  const funnelTotal = candidates.length;
 
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
-            Good morning, {firstName} 👋
+            Good morning, {firstName}
           </h1>
           <p className="mt-1 text-[11px] text-gray-500 sm:text-xs md:text-sm">
             Here&apos;s what&apos;s happening with your recruitment platform today.
@@ -94,14 +106,14 @@ export default function EmployerDashboardPage() {
         </div>
         <Link
           href="/employer/jobs/new"
-          className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#8A38F5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#7226e0] sm:px-4 sm:py-2.5 sm:text-sm"
+          className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#8A38F5] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-[#7226e0] sm:px-4 sm:py-2.5 sm:text-sm"
         >
           <Plus size={15} className="sm:size-4" />
           Post a Job
         </Link>
       </div>
 
-      {/* Stat cards */}
+      {/* Stats Section */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {stats.map((stat) => (
           <div
@@ -111,7 +123,7 @@ export default function EmployerDashboardPage() {
             <span className={`absolute top-3 right-3 h-2 w-2 rounded-full sm:top-4 sm:right-4 ${stat.dot}`} />
             <p className="text-[11px] text-gray-500 sm:text-xs md:text-sm">{stat.label}</p>
             <p className="mt-1.5 text-lg font-bold text-gray-900 sm:mt-2 sm:text-xl md:text-2xl">
-              {stat.value}
+              {loading ? "..." : stat.value}
             </p>
           </div>
         ))}
@@ -130,21 +142,28 @@ export default function EmployerDashboardPage() {
             </Link>
           </div>
 
-          {recentApplications.length === 0 ? (
+          {recentCandidates.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">No applicants yet.</p>
           ) : (
             <div className="flex flex-col divide-y divide-gray-100">
-              {recentApplications.map((app) => (
-                <div key={app.id} className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0 sm:gap-3 sm:py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-gray-900 sm:text-sm">{app.jobTitle}</p>
-                    <p className="truncate text-[10px] text-gray-500 sm:text-xs">{app.location}</p>
+              {recentCandidates.map((candidate) => {
+                const stageKey = getCandidateStageKey(candidate);
+                return (
+                  <div key={candidate.id} className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0 sm:gap-3 sm:py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-gray-900 sm:text-sm">
+                        {candidate.name || "Anonymous Applicant"}
+                      </p>
+                      <p className="truncate text-[10px] text-gray-500 sm:text-xs">
+                        {candidate.jobTitle || "Applied Role"}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize whitespace-nowrap sm:px-3 sm:py-1 sm:text-xs ${statusStyles[stageKey]}`}>
+                      {stageKey}
+                    </span>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize whitespace-nowrap sm:px-3 sm:py-1 sm:text-xs ${statusStyles[app.status]}`}>
-                    {app.status}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -191,7 +210,7 @@ export default function EmployerDashboardPage() {
         </div>
       </div>
 
-      {/* Top Performing Jobs — real jobs, matched against real applications by title */}
+      {/* Top Performing Jobs */}
       <div className="rounded-2xl border border-gray-100 bg-white p-3 transition-shadow duration-200 hover:shadow-md sm:p-5 md:p-6">
         <div className="mb-3 flex items-center justify-between sm:mb-4">
           <h2 className="text-xs font-bold text-gray-900 sm:text-sm md:text-base">Top Performing Jobs</h2>
@@ -204,16 +223,12 @@ export default function EmployerDashboardPage() {
         </div>
 
         {jobs.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400">
-          No jobs posted yet.{" "}
-          <Link href="/employer/jobs/new" className="font-semibold text-[#8A38F5] hover:underline">
-            Post your first job
-          </Link>
-        </p>
-      ) : applications.length === 0 ? (
-        <p className="py-6 text-center text-sm text-gray-400">
-          No applications yet — this will populate once candidates start applying.
-        </p>
+          <p className="py-6 text-center text-sm text-gray-400">
+            No jobs posted yet.{" "}
+            <Link href="/employer/jobs/new" className="font-semibold text-[#8A38F5] hover:underline">
+              Post your first job
+            </Link>
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] text-left">
@@ -227,9 +242,10 @@ export default function EmployerDashboardPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {jobs.slice(0, 5).map((job) => {
-                  const matched = applications.filter(
-                    (a) => a.jobTitle.trim().toLowerCase() === job.title.trim().toLowerCase()
-                  );
+                  const jobCandidates = candidates.filter((c) => c.jobId === job.id);
+                  const interviews = jobCandidates.filter((c) => getCandidateStageKey(c) === "interview").length;
+                  const hires = jobCandidates.filter((c) => getCandidateStageKey(c) === "hired").length;
+
                   return (
                     <tr key={job.id}>
                       <td className="py-2.5 sm:py-3">
@@ -238,13 +254,9 @@ export default function EmployerDashboardPage() {
                           {job.location} · {job.workMode}
                         </p>
                       </td>
-                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{matched.length}</td>
-                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">
-                        {matched.filter((a) => a.status === "interview").length}
-                      </td>
-                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">
-                        {matched.filter((a) => a.status === "hired").length}
-                      </td>
+                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{jobCandidates.length}</td>
+                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{interviews}</td>
+                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{hires}</td>
                     </tr>
                   );
                 })}

@@ -1,4 +1,3 @@
-// lib/auth/session.ts
 export interface Session {
   email: string;
   role: string;

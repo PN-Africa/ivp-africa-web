@@ -1,126 +1,101 @@
-export interface SubscriptionPlan {
+import { apiFetch } from "@/lib/api/httpClient";
+import { session } from "@/lib/auth/session";
+
+// ============================================================================
+// REAL API INTERFACES
+// ============================================================================
+
+export interface RealPlan {
   id: string;
   name: string;
   price: number;
-  jobLimit: number | null; // null = unlimited
-  applicationLimit: number | null;
-  features: string[];
+  durationMonths: number;
+  benefits: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface PaymentRecord {
+export interface RealSubscription {
   id: string;
-  description: string;
-  amount: number;
-  status: "success" | "failed";
-  date: string; // ISO date
-}
-
-export interface SubscriptionState {
+  employerId: string;
   planId: string;
-  nextRenewal: string; // ISO date
-  candidatesViewed: number;
-  candidateViewLimit: number | null;
-  payments: PaymentRecord[];
+  status: "ACTIVE" | "EXPIRED" | "CANCELLED";
+  startDate: string; // ISO date
+  endDate: string;   // ISO date
+  plan: RealPlan;
 }
 
-
-const PREFIX = "ivp_employer_subscription_";
-
-export const plans: SubscriptionPlan[] = [
-  {
-    id: "starter",
-    name: "Starter Free",
-    price: 0,
-    jobLimit: 3,
-    applicationLimit: 50,
-    features: ["3 Active Jobs", "50 Applications/mo", "Standard Support"],
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    price: 49,
-    jobLimit: 15,
-    applicationLimit: null,
-    features: ["15 Active Jobs", "Unlimited Applications", "Priority Matching", "Advanced Filters"],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: 149,
-    jobLimit: null,
-    applicationLimit: null,
-    features: ["Unlimited Jobs", "Dedicated Recruiter", "Custom Branding", "Integration APIs"],
-  },
-];
-
-function keyFor(email: string) {
-  return PREFIX + email.toLowerCase();
-}
-
-function addMonths(iso: string, months: number): string {
-  const d = new Date(iso);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString();
-}
-
-function defaultState(): SubscriptionState {
-  const now = new Date().toISOString();
-  return {
-    planId: "professional",
-    nextRenewal: addMonths(now, 1),
-    candidatesViewed: 108,
-    candidateViewLimit: null,
-    payments: [
-      { id: crypto.randomUUID(), description: "Professional Plan - Initial Signup", amount: 49, status: "success", date: addMonths(now, -4) },
-      { id: crypto.randomUUID(), description: "Professional Plan - Monthly Renewal", amount: 49, status: "success", date: addMonths(now, -3) },
-      { id: crypto.randomUUID(), description: "Professional Plan - Monthly Renewal", amount: 49, status: "success", date: addMonths(now, -2) },
-      { id: crypto.randomUUID(), description: "Professional Plan - Monthly Renewal", amount: 49, status: "success", date: addMonths(now, -1) },
-    ],
+export interface PaymentInitResponse {
+  message: string;
+  paymentUrl: string;
+  summary: {
+    planName: string;
+    amount: number;
+    duration: string;
   };
 }
 
-function readState(email: string): SubscriptionState {
-  if (typeof window === "undefined") return defaultState();
-  try {
-    const raw = localStorage.getItem(keyFor(email));
-    return raw ? JSON.parse(raw) : defaultState();
-  } catch {
-    return defaultState();
-  }
+export interface RealPaymentRecord {
+  id: string;
+  employerId: string;
+  planId: string;
+  amount: string;
+  reference: string;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  channel: string;
+  createdAt: string;
+  plan: {
+    name: string;
+    price: number;
+    durationMonths: number;
+  };
 }
 
-function writeState(email: string, state: SubscriptionState) {
-  localStorage.setItem(keyFor(email), JSON.stringify(state));
+function authHeaders(): HeadersInit {
+  const current = session.get();
+  return current?.accessToken ? { Authorization: `Bearer ${current.accessToken}` } : {};
 }
+
+// ============================================================================
+// API CLIENT
+// ============================================================================
 
 export const subscriptionApi = {
-  get(email: string): SubscriptionState {
-    const existing = readState(email);
-    // seed once if nothing saved yet
-    if (!localStorage.getItem(keyFor(email))) {
-      writeState(email, existing);
-    }
-    return existing;
-  },
-
-  changePlan(email: string, planId: string) {
-    const state = readState(email);
-    const plan = plans.find((p) => p.id === planId);
-    if (!plan) return;
-
-    const payment: PaymentRecord = {
-      id: crypto.randomUUID(),
-      description: `${plan.name} Plan - Plan Change`,
-      amount: plan.price,
-      status: "success",
-      date: new Date().toISOString(),
-    };
-
-    writeState(email, {
-      ...state,
-      planId,
-      nextRenewal: addMonths(new Date().toISOString(), 1),
-      payments: [payment, ...state.payments],
+  // 1. Fetch available plans (Pricing Table)
+  getPlans: async () => {
+    const res = await apiFetch<RealPlan[]>("/api/v1/subscriptions/plans", {
+      method: "GET",
+      headers: authHeaders(),
     });
+    return res;
   },
+
+  // 2. Get Current Subscription 
+  getCurrent: async () => {
+    const res = await apiFetch<RealSubscription>("/api/v1/subscriptions/current", {
+      method: "GET",
+      headers: authHeaders(),
+    });
+    return res;
+  },
+
+  // 3. Initialize Paystack Checkout (Replaces the old instant-purchase)
+  initializePayment: async (planId: string) => {
+    const res = await apiFetch<PaymentInitResponse>("/api/v1/payments/initialize", {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ planId }),
+    });
+    return res;
+  },
+
+  // 4. Get Payment History for the Invoice Table
+  getPaymentHistory: async () => {
+    const res = await apiFetch<RealPaymentRecord[]>("/api/v1/payments/history", {
+      method: "GET",
+      headers: authHeaders(),
+    });
+    return res;
+  }
 };

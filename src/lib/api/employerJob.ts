@@ -33,8 +33,9 @@ export interface CreateBackendJobPayload {
   status?: "PUBLISHED" | "DRAFT";
 }
 
-// Helper to translate backend job entity to frontend shape
 function mapBackendJobToEmployerJob(raw: any): EmployerJob {
+  console.log("Raw job from backend:", raw); // <-- ADD THIS
+  
   let mappedStatus: EmployerJobStatus = "active";
   if (raw.status === "DRAFT") mappedStatus = "draft";
   if (raw.status === "CLOSED") mappedStatus = "closed";
@@ -51,7 +52,13 @@ function mapBackendJobToEmployerJob(raw: any): EmployerJob {
     maxSalary: raw.maxSalary ?? "",
     deadline: raw.deadline ? new Date(raw.deadline).toISOString().split("T")[0] : "",
     skills: raw.requiredSkills || [],
-    applicants: raw._count?.applications ?? 0,
+    
+    // TEMPORARY FIX: Check common variations of how this might be returned
+    applicants: raw._count?.applications 
+      ?? raw.applicationCount 
+      ?? raw.applications?.length 
+      ?? 0,
+      
     status: mappedStatus,
     postedOn: raw.createdAt ? new Date(raw.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
   };
@@ -59,7 +66,7 @@ function mapBackendJobToEmployerJob(raw: any): EmployerJob {
 
 export const employerJobsApi = {
   async getAll(): Promise<{ ok: boolean; data?: EmployerJob[]; message?: string }> {
-    const res = await apiFetch<any[]>("/api/v1/jobs/my-jobs", { method: "GET" });
+    const res = await apiFetch<any[]>("/api/v1/jobs/my-postings", { method: "GET" });
     if (!res.ok) {
     return { ok: false, message: res.message || "Failed to fetch jobs" };
   }
