@@ -9,14 +9,15 @@ const PAGE_SIZE = 20;
 
 const statusStyles: Record<AdminUserView["status"], string> = {
   active: "bg-green-50 text-green-700",
+  inactive: "bg-gray-100 text-gray-600",
   suspended: "bg-red-50 text-red-600",
 };
 
 const statusLabels: Record<AdminUserView["status"], string> = {
   active: "Active",
+  inactive: "Inactive",
   suspended: "Suspended",
 };
-
 const roleLabels: Record<AdminUserView["role"], string> = {
   talent: "Talent",
   employer: "Employer",
@@ -30,13 +31,29 @@ function getInitials(name: string) {
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState<AdminUserView[]>([]);
+  const [loading, setLoading] =useState(true)
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All types");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    setUsers(adminUsersApi.getAll());
-  }, []);
+  async function loadUsers() {
+    setLoading(true);
+    const result = await adminUsersApi.getAll();
+
+    if (!result.ok) {
+      console.error("Failed to load users:", result.message);
+      setLoading(false);
+      return;
+    }
+
+    setUsers(result.users);
+    setLoading(false);
+  }
+
+  loadUsers();
+}, []);
+
 
  const filteredUsers = useMemo(() => {
   return users
@@ -114,6 +131,29 @@ export default function UserManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
+              {loading ? (
+    <tr>
+      <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
+        Loading users...
+      </td>
+    </tr>
+  ) : (
+    <>
+      {paginatedUsers.map((user) => (
+        <tr key={user.email} className="transition-colors hover:bg-gray-50">
+          {/* ...unchanged row content... */}
+        </tr>
+      ))}
+
+      {paginatedUsers.length === 0 && (
+        <tr>
+          <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
+            No users match your search or filter.
+          </td>
+        </tr>
+      )}
+    </>
+  )}
               {paginatedUsers.map((user) => (
                 <tr key={user.email} className="transition-colors hover:bg-gray-50">
                   <td className="px-4 py-4 sm:px-6">
@@ -153,13 +193,7 @@ export default function UserManagementPage() {
                 </tr>
               ))}
 
-              {paginatedUsers.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
-                    No users match your search or filter.
-                  </td>
-                </tr>
-              )}
+              
             </tbody>
           </table>
         </div>

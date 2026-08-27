@@ -2,30 +2,40 @@
 
 import { ShieldCheck, Briefcase, ClipboardList, ClipboardCheck } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
-import {adminUsersApi, AdminUserView} from "@/lib/api/adminUsers";
-import { employerJobsApi } from "@/lib/api/employerJob";
-import { applicationsApi } from "@/lib/api/applications";
+import {AdminUserView} from "@/lib/api/adminUsers";
 import type { ApplicationRecord } from "@/lib/types/application";
 import { useEffect, useState } from "react";
-
-import { auditLogsApi } from "@/lib/api/auditLogs";
-import type { AuditLogEntry } from "@/lib/types/auditLog";
+import { adminReportsApi } from "@/lib/api/adminReports";
+import { adminJobsApi } from "@/lib/api/adminJobs";
+import { adminAuditLogsApi,AdminAuditLogEntry } from "@/lib/api/auditLogs";
+import {
+  adminDashboardApi,
+  type PendingVerification,
+} from "@/lib/api/adminDashboard";
+// import type { AuditLogEntry } from "@/lib/types/auditLog";
 
 export default function AdminDashboardPage() {
   const { session } = useSession();
  
-  const [candidateCount, setCandidateCount] = useState(0);
-  const [activeJobCount, setActiveJobCount] = useState(0);
-  const [totalApplications, setTotalApplications] = useState(0);
-  const [recentUsers, setRecentUsers] = useState<AdminUserView[]>([]);
-  const [recentApplications, setRecentApplications] = useState<ApplicationRecord[]>([]);
-  const [latestUpdates, setLatestUpdates] = useState<AuditLogEntry[]>([]);
-   const stats = [
+    const [recentApplications, setRecentApplications] = useState<ApplicationRecord[]>([]);
+    // const [latestUpdates, setLatestUpdates] = useState<AuditLogEntry[]>([]);
+    const [latestUpdates, setLatestUpdates] = useState<AdminAuditLogEntry[]>([]);
+    const [candidateCount, setCandidateCount] = useState(0);
+    const [activeJobCount, setActiveJobCount] = useState(0);
+    const [totalApplications, setTotalApplications] = useState(0);
+    const [pendingVerificationCount, setPendingVerificationCount] = useState(0);
+      const [pendingVerifications, setPendingVerifications] =
+      useState<PendingVerification[]>([]);
+  const stats = [
     { icon: ShieldCheck, label: "Registered candidates", value: candidateCount, filled: true },
     { icon: Briefcase, label: "Job applications", value: totalApplications, filled: false },
     { icon: ClipboardList, label: "Active job postings", value: activeJobCount, filled: false },
-    { icon: ClipboardCheck, label: "Pending verifications", value: "—", filled: false }, // honest gap, see below
-  ];
+   {
+  icon: ClipboardCheck,
+  label: "Pending verifications",
+  value: pendingVerificationCount,
+  filled: false,
+}];
 
 
 const statusStyles: Record<ApplicationRecord["status"], string> = {
@@ -35,53 +45,30 @@ const statusStyles: Record<ApplicationRecord["status"], string> = {
   rejected: "bg-red-50 text-red-600",
    hired: "bg-green-50 text-green-700",
 };
-
-
 useEffect(() => {
-  const allUsers = adminUsersApi.getAll();
+  async function loadDashboard() {
+    const result = await adminDashboardApi.getStats();
 
-  const candidates = allUsers.filter((u) => u.role === "talent");
+    if (!result.ok) {
+      console.error("Failed to load admin dashboard:", result.message);
+      return;
+    }
 
-  setCandidateCount(candidates.length);
+    const { overview, lists } = result.data;
 
-  // Admin job count is not available from /my-jobs.
-  // That endpoint only returns jobs belonging to the logged-in employer.
-  setActiveJobCount(0);
+    setCandidateCount(overview.totalCandidates);
+    setActiveJobCount(overview.activeJobs);
+    setTotalApplications(overview.totalApplications);
+    setPendingVerificationCount(overview.pendingVerificationCount);
+    setPendingVerifications(lists.pendingVerifications);
 
-  let applications = 0;
+    const auditResult = await adminAuditLogsApi.getAll({ limit: 3 });
+    if (auditResult.ok) {
+      setLatestUpdates(auditResult.logs);
+    }
+  }
 
-  candidates.forEach((c) => {
-    applications += applicationsApi.getAll(c.email).length;
-  });
-
-  setTotalApplications(applications);
-
-  const allApplications: ApplicationRecord[] = [];
-
-  candidates.forEach((c) => {
-    allApplications.push(...applicationsApi.getAll(c.email));
-  });
-
-  allApplications.sort(
-    (a, b) =>
-      new Date(b.appliedAt).getTime() -
-      new Date(a.appliedAt).getTime()
-  );
-
-  setRecentApplications(allApplications.slice(0, 4));
-
-  setLatestUpdates(auditLogsApi.getAll().slice(0, 3));
-
-  setRecentUsers(
-    [...allUsers]
-      .filter((u) => u.createdAt)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt!).getTime() -
-          new Date(a.createdAt!).getTime()
-      )
-      .slice(0, 5)
-  );
+  loadDashboard();
 }, []);
 function dotColorFor(action: string) {
   if (action.toLowerCase().includes("suspend")) return "bg-red-500";
@@ -179,7 +166,10 @@ function formatTimeAgo(iso: string) {
         <div className="rounded-2xl border border-gray-100 bg-white p-4 transition-shadow duration-200 hover:shadow-md sm:p-6">
           <h2 className="text-sm font-bold text-gray-900 sm:text-base">Platform summary</h2>
           <p className="mt-2 text-xs leading-relaxed text-gray-500 sm:text-sm">
-            Admin operations are normal. 12 background jobs successfully processed today. 3 employers waiting for manual verifications.
+            Admin operations are normal.{" "}
+            {pendingVerificationCount} employer
+            {pendingVerificationCount !== 1 ? "s" : ""} waiting for manual
+            verification.
           </p>
           <div className="mt-4 flex flex-col gap-2.5 border-t border-gray-100 pt-3 text-xs sm:text-sm">
             <div className="flex justify-between">
@@ -211,16 +201,37 @@ function formatTimeAgo(iso: string) {
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white p-4 transition-shadow duration-200 hover:shadow-md sm:p-5">
-            <p className="text-[11px] font-semibold tracking-wide text-[#8A38F5] uppercase sm:text-xs">Verification</p>
-            <p className="mt-2 text-xs font-bold text-gray-900 sm:text-sm">Flagged Employer Alert</p>
-            <p className="mt-1 text-xs text-gray-500 sm:text-sm">Company Vantage Tech has 3 unresolved candidate flags.</p>
-            <button
-              type="button"
-              className="mt-4 rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-900 transition-colors hover:bg-[#8A38F5] hover:text-white sm:px-4 sm:py-2 sm:text-sm"
-            >
-              Inspect Vantage
-            </button>
-          </div>
+  <p className="text-[11px] font-semibold tracking-wide text-[#8A38F5] uppercase sm:text-xs">
+    Verification
+  </p>
+
+  <p className="mt-2 text-xs font-bold text-gray-900 sm:text-sm">
+    Employer verification pending
+  </p>
+
+  {pendingVerifications.length > 0 ? (
+    <>
+      <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+        {pendingVerifications[0].companyName} is waiting for verification.
+      </p>
+
+      <p className="mt-1 text-xs text-gray-400">
+        {pendingVerifications[0].user.email}
+      </p>
+
+      <button
+        type="button"
+        className="mt-4 rounded-xl bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-900 transition-colors hover:bg-[#8A38F5] hover:text-white sm:px-4 sm:py-2 sm:text-sm"
+      >
+        Review employer
+      </button>
+    </>
+  ) : (
+    <p className="mt-1 text-xs text-gray-500 sm:text-sm">
+      No employers are currently waiting for verification.
+    </p>
+  )}
+</div>
         </div>
       </div>
 

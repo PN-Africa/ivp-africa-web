@@ -60,8 +60,10 @@ function mapBackendJobToEmployerJob(raw: any): EmployerJob {
 export const employerJobsApi = {
   async getAll(): Promise<{ ok: boolean; data?: EmployerJob[]; message?: string }> {
     const res = await apiFetch<any[]>("/api/v1/jobs/my-jobs", { method: "GET" });
+    console.log("my-jobs",res);
     if (!res.ok) {
     return { ok: false, message: res.message || "Failed to fetch jobs" };
+    console.log("my-jobs",res);
   }
   if (!res.data) {
     return { ok: false, message: "Failed to fetch jobs" };

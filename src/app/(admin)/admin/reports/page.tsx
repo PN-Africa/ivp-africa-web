@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
 import { ChevronDown, Download, ShieldCheck, Briefcase, ClipboardList, ClipboardCheck, TrendingUp } from "lucide-react";
 import { adminUsersApi, type AdminUserView } from "@/lib/api/adminUsers";
-import { employerJobsApi } from "@/lib/api/employerJob";
-import type { EmployerJob } from "@/lib/api/employerJob";
+import { adminJobsApi } from "@/lib/api/adminJobs";
+import {
+  adminDashboardApi,
+  type PendingVerification,
+} from "@/lib/api/adminDashboard";
 
 type ReportType = "platform" | "candidates" | "employers";
 type RangeOption = "Last 6 Months" | "Last 12 Months";
@@ -58,39 +61,54 @@ function toCsv(rows: Record<string, string | number | undefined>[]): string {
 
 export default function ReportsPage() {
   const [users, setUsers] = useState<AdminUserView[]>([]);
-  const [allJobs, setAllJobs] = useState<EmployerJob[]>([]);
+  const [allJobs, setAllJobs] = useState<any[]>([]);
   const [reportType, setReportType] = useState<ReportType>("platform");
   const [range, setRange] = useState<RangeOption>("Last 12 Months");
   const [checked, setChecked] = useState(false);
+  const [pendingVerificationCount, setPendingVerificationCount] = useState(0);
+  const [pendingVerifications, setPendingVerifications] =   useState<PendingVerification[]>([]);
 
-  useEffect(() => {
-    const allUsers = adminUsersApi.getAll().filter((u) => u.role !== "admin");
-    setUsers(allUsers);
+ useEffect(() => {
+  async function loadReports() {
+    const usersResult = await adminUsersApi.getAll();
+    if (usersResult.ok) {
+      setUsers(usersResult.users.filter((u) => u.role !== "admin"));
+    } else {
+      console.error("Failed to load users for reports:", usersResult.message);
+    }
 
-    const employers = allUsers.filter((u) => u.role === "employer");
-    const jobs: EmployerJob[] = [];
-    // employers.forEach((emp) => jobs.push(...employerJobsApi.getAll(emp.email)));
-    setAllJobs(jobs);
+    const jobsResult = await adminJobsApi.getAll();
+    if (jobsResult.ok) {
+      setAllJobs(jobsResult.jobs);
+    } else {
+      console.error("Failed to load jobs for reports:", jobsResult.message);
+    }
+
+    const statsResult = await adminDashboardApi.getStats();
+    if (statsResult.ok) {
+      setPendingVerificationCount(statsResult.data.overview.pendingVerificationCount);
+      setPendingVerifications(statsResult.data.lists.pendingVerifications);
+    } else {
+      console.error("Failed to load dashboard stats for reports:", statsResult.message);
+    }
 
     setChecked(true);
-  }, []);
+  }
 
+  loadReports();
+}, []);
   const candidates = users.filter((u) => u.role === "talent");
   const employers = users.filter((u) => u.role === "employer");
   const candidateCount = candidates.length;
   const employerCount = employers.length;
-  const activeJobCount = allJobs.filter((j) => j.status === "active").length;
-
-  // Honest placeholder — Employer Verification's pending requests are still
-  // in-memory mock data on that page, not stored anywhere this page can read.
-  const pendingVerifications: number | null = null;
+  const activeJobCount = allJobs.filter((j) => j.status === "PUBLISHED").length;
 
   const monthsToShow = rangeToMonths(range);
   const buckets = useMemo(() => buildMonthBuckets(monthsToShow), [monthsToShow]);
 
   const candidateDates = candidates.filter((u) => u.createdAt).map((u) => new Date(u.createdAt!));
   const employerDates = employers.filter((u) => u.createdAt).map((u) => new Date(u.createdAt!));
-  const jobDates = allJobs.map((j) => new Date(j.postedOn));
+  const jobDates = allJobs.map((j) => new Date(j.createdAt));
 
   const candidateCounts = countByMonth(candidateDates, buckets);
   const employerCounts = countByMonth(employerDates, buckets);
@@ -107,44 +125,46 @@ export default function ReportsPage() {
     return Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
   }, [buckets, candidateCounts, employerCounts]);
 
-const chartData = useMemo(() => {
-  return buckets.map((b) => {
-    if (reportType === "platform") {
+  const chartData = useMemo(() => {
+    return buckets.map((b) => {
+      if (reportType === "platform") {
+        return {
+          label: b.label,
+          "Candidate Registrations": candidateCounts[b.key] ?? 0,
+          "Employer Registrations": employerCounts[b.key] ?? 0,
+        };
+      }
+      if (reportType === "candidates") {
+        return { label: b.label, "Candidate Registrations": candidateCounts[b.key] ?? 0 };
+      }
       return {
         label: b.label,
-        "Candidate Registrations": candidateCounts[b.key] ?? 0,
         "Employer Registrations": employerCounts[b.key] ?? 0,
+        "Jobs Posted": jobCounts[b.key] ?? 0,
       };
-    }
-    if (reportType === "candidates") {
-      return { label: b.label, "Candidate Registrations": candidateCounts[b.key] ?? 0 };
-    }
-    return {
-      label: b.label,
-      "Employer Registrations": employerCounts[b.key] ?? 0,
-      "Jobs Posted": jobCounts[b.key] ?? 0,
-    };
-  });
-}, [buckets, reportType, candidateCounts, employerCounts, jobCounts]);
+    });
+  }, [buckets, reportType, candidateCounts, employerCounts, jobCounts]);
+
   const hasActivity = chartData.some((row) =>
     Object.entries(row).some(([key, val]) => key !== "label" && typeof val === "number" && val > 0)
   );
 
-const lineConfig =
-  reportType === "platform"
-    ? [
-        { key: "Candidate Registrations", color: "#8A38F5" },
-        { key: "Employer Registrations", color: "#3B82F6" },
-      ]
-    : reportType === "candidates"
-      ? [{ key: "Candidate Registrations", color: "#8A38F5" }]
-      : [
-          { key: "Employer Registrations", color: "#8A38F5" },
-          { key: "Jobs Posted", color: "#3B82F6" },
-        ];
+  const lineConfig =
+    reportType === "platform"
+      ? [
+          { key: "Candidate Registrations", color: "#8A38F5" },
+          { key: "Employer Registrations", color: "#3B82F6" },
+        ]
+      : reportType === "candidates"
+        ? [{ key: "Candidate Registrations", color: "#8A38F5" }]
+        : [
+            { key: "Employer Registrations", color: "#8A38F5" },
+            { key: "Jobs Posted", color: "#3B82F6" },
+          ];
 
   function handleExport() {
-   const csv = toCsv(chartData as unknown as Record<string, string | number>[]);    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const csv = toCsv(chartData as unknown as Record<string, string | number>[]);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -157,7 +177,7 @@ const lineConfig =
     { icon: ShieldCheck, label: "Registered candidates", value: candidateCount, filled: true },
     { icon: Briefcase, label: "Registered employers", value: employerCount },
     { icon: ClipboardList, label: "Active job postings", value: activeJobCount },
-    { icon: ClipboardCheck, label: "Pending verifications", value: pendingVerifications ?? "—" },
+    { icon: ClipboardCheck, label: "Pending verifications", value: pendingVerificationCount, filled: false  },
     { icon: TrendingUp, label: "Overall growth", value: `${overallGrowthPercent >= 0 ? "+" : ""}${overallGrowthPercent}%` },
   ];
 

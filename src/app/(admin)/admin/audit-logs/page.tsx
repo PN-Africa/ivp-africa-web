@@ -2,8 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { Search, ChevronDown, Download } from "lucide-react";
-import { auditLogsApi } from "@/lib/api/auditLogs";
-import type { AuditLogEntry as RealAuditLogEntry } from "@/lib/types/auditLog";
+import { adminAuditLogsApi, type AdminAuditLogEntry } from "@/lib/api/auditLogs";
 
 interface DisplayLogEntry {
   id: string;
@@ -13,14 +12,6 @@ interface DisplayLogEntry {
   timeAgo: string;
   timestamp: number;
 }
-
-const mockLogs: DisplayLogEntry[] = [
-  { id: "1", adminName: "Zainab Ibrahim", action: "Suspended account", target: "Fatima Yusuf", timeAgo: "2 hrs ago", timestamp: Date.now() - 2 * 3600_000 },
-  { id: "2", adminName: "David Okafor", action: "Approved verification", target: "Vantage Tech", timeAgo: "1 day ago", timestamp: Date.now() - 1 * 86400_000 },
-  { id: "3", adminName: "Amara Chukwu", action: "Reset password", target: "Kofi Mensah", timeAgo: "2 days ago", timestamp: Date.now() - 2 * 86400_000 },
-  { id: "4", adminName: "Zainab Ibrahim", action: "Rejected verification", target: "AfriHealth Corp", timeAgo: "3 days ago", timestamp: Date.now() - 3 * 86400_000 },
-  { id: "5", adminName: "David Okafor", action: "Flagged job posting", target: "Customer Success Lead", timeAgo: "4 days ago", timestamp: Date.now() - 4 * 86400_000 },
-];
 
 const dateRangeOptions = ["Last 7 Days", "Last 30 Days", "Last 90 Days", "All time"];
 const PAGE_SIZE = 20;
@@ -54,22 +45,30 @@ function toCsv(rows: DisplayLogEntry[]): string {
 }
 
 export default function AuditLogsPage() {
-  const [realLogs, setRealLogs] = useState<RealAuditLogEntry[]>([]);
-  const [checked, setChecked] = useState(false);
+  const [logs, setLogs] = useState<AdminAuditLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState("Last 30 Days");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    setRealLogs(auditLogsApi.getAll());
-    setChecked(true);
+    async function load() {
+      setLoading(true);
+      setLoadError(null);
+      const result = await adminAuditLogsApi.getAll();
+      if (result.ok) {
+        setLogs(result.logs);
+      } else {
+        setLoadError(result.message ?? "Failed to load audit logs.");
+      }
+      setLoading(false);
+    }
+    load();
   }, []);
 
-  const isUsingMockData = checked && realLogs.length === 0;
-
   const displayLogs: DisplayLogEntry[] = useMemo(() => {
-    if (isUsingMockData) return mockLogs;
-    return realLogs.map((log) => ({
+    return logs.map((log) => ({
       id: log.id,
       adminName: log.adminName,
       action: log.action,
@@ -77,7 +76,7 @@ export default function AuditLogsPage() {
       timeAgo: formatTimeAgo(new Date(log.createdAt).getTime()),
       timestamp: new Date(log.createdAt).getTime(),
     }));
-  }, [realLogs, isUsingMockData]);
+  }, [logs]);
 
   const filteredLogs = useMemo(() => {
     const limit = daysAgoLimit(dateRange);
@@ -126,7 +125,6 @@ export default function AuditLogsPage() {
         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Audit Logs</h1>
         <p className="mt-1 text-xs text-gray-500 sm:text-sm">
           Search and review every administrative action taken on the platform.
-          {isUsingMockData && " (Showing demo data — no real actions logged yet.)"}
         </p>
       </div>
 
@@ -180,33 +178,45 @@ export default function AuditLogsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {paginatedLogs.map((log) => (
-                <tr key={log.id} className="transition-colors hover:bg-gray-50">
-                  <td className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EDE7F8] text-xs font-semibold text-[#8A38F5]">
-                        {getInitials(log.adminName)}
-                      </div>
-                      <span className="text-sm font-semibold text-gray-900">{log.adminName}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 sm:px-6">
-                    <p className="text-sm text-gray-700">{log.action}</p>
-                    <p className="text-xs text-gray-400 sm:hidden">{log.target}</p>
-                  </td>
-                  <td className="hidden px-4 py-4 text-sm text-gray-400 sm:table-cell sm:px-6">{log.target}</td>
-                  <td className="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-400 sm:px-6">
-                    {log.timeAgo}
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-400">
+                    Loading audit logs...
                   </td>
                 </tr>
-              ))}
-
-              {paginatedLogs.length === 0 && (
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-10 text-center text-sm text-red-500">
+                    {loadError}
+                  </td>
+                </tr>
+              ) : paginatedLogs.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-400">
                     No matching audit log entries.
                   </td>
                 </tr>
+              ) : (
+                paginatedLogs.map((log) => (
+                  <tr key={log.id} className="transition-colors hover:bg-gray-50">
+                    <td className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#EDE7F8] text-xs font-semibold text-[#8A38F5]">
+                          {getInitials(log.adminName)}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">{log.adminName}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 sm:px-6">
+                      <p className="text-sm text-gray-700">{log.action}</p>
+                      <p className="text-xs text-gray-400 sm:hidden">{log.target}</p>
+                    </td>
+                    <td className="hidden px-4 py-4 text-sm text-gray-400 sm:table-cell sm:px-6">{log.target}</td>
+                    <td className="px-4 py-4 text-right text-sm whitespace-nowrap text-gray-400 sm:px-6">
+                      {log.timeAgo}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

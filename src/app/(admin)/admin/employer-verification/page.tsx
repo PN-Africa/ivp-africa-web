@@ -1,44 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Building2, Check, X, Search, ChevronDown } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
-import { auditLogsApi } from "@/lib/api/auditLogs";
-interface PendingEmployer {
-  id: string;
-  company: string;
-  industry: string;
-  submittedDate: string;
-  submittedAt: number;
-  iconBg: string;
-  iconColor: string;
-}
-
-const iconPalette = [
-  { iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  { iconBg: "bg-rose-100", iconColor: "text-rose-600" },
-  { iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  { iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  { iconBg: "bg-violet-100", iconColor: "text-violet-600" },
-  { iconBg: "bg-cyan-100", iconColor: "text-cyan-600" },
-];
-
-const rawRequests: Omit<PendingEmployer, "iconBg" | "iconColor">[] = [
-  { id: "1", company: "Vantage Tech", industry: "Tech & Telco", submittedDate: "Jan 15, 2026", submittedAt: Date.now() - 1 * 86400_000 },
-  { id: "2", company: "AfriHealth Corp", industry: "Healthcare", submittedDate: "Jan 14, 2026", submittedAt: Date.now() - 2 * 86400_000 },
-  { id: "3", company: "Safaricom PLC", industry: "Tech & Telco", submittedDate: "Jan 12, 2026", submittedAt: Date.now() - 4 * 86400_000 },
-  { id: "4", company: "Kaziflow Technologies", industry: "Technology", submittedDate: "Jan 11, 2026", submittedAt: Date.now() - 5 * 86400_000 },
-  { id: "5", company: "Baobab Microfinance Group", industry: "Finance", submittedDate: "Jan 10, 2026", submittedAt: Date.now() - 10 * 86400_000 },
-  { id: "6", company: "Sahara Agritech", industry: "Agriculture", submittedDate: "Jan 9, 2026", submittedAt: Date.now() - 15 * 86400_000 },
-  { id: "7", company: "Nile Logistics Co.", industry: "Logistics", submittedDate: "Jan 8, 2026", submittedAt: Date.now() - 20 * 86400_000 },
-  { id: "8", company: "Jollof Media House", industry: "Media", submittedDate: "Jan 7, 2026", submittedAt: Date.now() - 35 * 86400_000 },
-];
-
-const initialRequests: PendingEmployer[] = rawRequests.map((req, i) => ({
-  ...req,
-  ...iconPalette[i % iconPalette.length],
-}));
+import type { AuditLogEntry as RealAuditLogEntry } from "@/lib/types/auditLog";
+import { adminEmployersApi, type PendingEmployerView } from "@/lib/api/adminEmployer";
 
 const dateOptions = ["All time", "Last 7 days", "Last 14 days", "Last 30 days"];
 const PAGE_SIZE = 20;
@@ -51,19 +18,41 @@ function daysLimit(option: string): number | null {
 }
 
 export default function EmployerVerificationPage() {
-  const [requests, setRequests] = useState<PendingEmployer[]>(initialRequests);
-  const [reviewing, setReviewing] = useState<PendingEmployer | null>(null);
+  const [requests, setRequests] = useState<PendingEmployerView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState<PendingEmployerView | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("All time");
   const [page, setPage] = useState(1);
+  const { session } = useSession();
+
+  function loadRequests() {
+    setLoading(true);
+    setLoadError(null);
+    adminEmployersApi.getPendingVerifications().then((result) => {
+      if (result.ok) {
+        setRequests(result.employers);
+      } else {
+        setLoadError(result.message ?? "Failed to load pending verifications.");
+      }
+      setLoading(false);
+    });
+  }
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
 
   const filteredRequests = useMemo(() => {
     const limit = daysLimit(dateFilter);
     const cutoff = limit ? Date.now() - limit * 86400_000 : null;
 
     return requests.filter((req) => {
-      const matchesSearch = search.trim() === "" || req.company.toLowerCase().includes(search.toLowerCase());
-      const matchesDate = cutoff === null || req.submittedAt >= cutoff;
+      const matchesSearch =
+        search.trim() === "" || req.companyName.toLowerCase().includes(search.toLowerCase());
+      const matchesDate = cutoff === null || new Date(req.submittedAt).getTime() >= cutoff;
       return matchesSearch && matchesDate;
     });
   }, [requests, search, dateFilter]);
@@ -84,19 +73,36 @@ export default function EmployerVerificationPage() {
     setPage(1);
   }
 
-  const { session } = useSession();
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
 
-function handleDecision(decision: "approve" | "reject") {
-  if (!reviewing) return;
-  auditLogsApi.add(
-    session?.displayName ?? "Admin",
-    decision === "approve" ? "Approved verification" : "Rejected verification",
-    reviewing.company
-  );
-  setRequests((prev) => prev.filter((r) => r.id !== reviewing.id));
-  setReviewing(null);
-  setPage((p) => Math.min(p, Math.max(1, Math.ceil((requests.length - 1) / PAGE_SIZE))));
-}
+  async function handleDecision(decision: "approve" | "reject") {
+    if (!reviewing) return;
+
+    const status = decision === "approve" ? "APPROVED" : "REJECTED";
+    const result = await adminEmployersApi.verify(
+      reviewing.id,
+      status,
+      decision === "reject" ? rejectionReason : undefined
+    );
+
+    if (!result.ok) {
+      console.error("Verification failed:", result.message);
+      return;
+    }
+
+    // adminAuditLogsApi.add(
+    //   session?.displayName ?? "Admin",
+    //   decision === "approve" ? "Approved verification" : "Rejected verification",
+    //   reviewing.companyName
+    // );
+
+    setRequests((prev) => prev.filter((r) => r.id !== reviewing.id));
+    setReviewing(null);
+    setRejectionReason("");
+    setPage((p) => Math.min(p, Math.max(1, Math.ceil((requests.length - 1) / PAGE_SIZE))));
+  }
 
   return (
     <>
@@ -115,7 +121,7 @@ function handleDecision(decision: "approve" | "reject") {
             type="text"
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search by Company name or email..."
+            placeholder="Search by Company name..."
             className="w-full min-w-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
           />
         </div>
@@ -140,7 +146,11 @@ function handleDecision(decision: "approve" | "reject") {
       <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
         <h2 className="mb-4 text-sm font-bold text-gray-900 sm:text-base">Pending requests</h2>
 
-        {filteredRequests.length === 0 ? (
+        {loading ? (
+          <p className="py-8 text-center text-sm text-gray-400">Loading pending requests...</p>
+        ) : loadError ? (
+          <p className="py-8 text-center text-sm text-red-500">{loadError}</p>
+        ) : filteredRequests.length === 0 ? (
           <p className="py-8 text-center text-sm text-gray-400">
             No pending employer requests match your search or filter.
           </p>
@@ -160,25 +170,25 @@ function handleDecision(decision: "approve" | "reject") {
                     <tr key={req.id} className="transition-colors hover:bg-gray-50">
                       <td className="py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${req.iconBg}`}>
-                            <Building2 size={18} className={req.iconColor} />
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#EDE7F8]">
+                            {req.logoUrl ? (
+                              <img src={req.logoUrl} alt={req.companyName} className="h-full w-full object-cover" />
+                            ) : (
+                              <Building2 size={18} className="text-[#8A38F5]" />
+                            )}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-gray-900">{req.company}</p>
-                            <p className="text-xs text-gray-400">{req.industry}</p>
-                            <p className="mt-0.5 text-xs text-gray-400 sm:hidden">{req.submittedDate}</p>
+                            <p className="truncate text-sm font-semibold text-gray-900">{req.companyName}</p>
+                            <p className="text-xs text-gray-400">{req.industry ?? "Industry not provided"}</p>
+                            <p className="mt-0.5 text-xs text-gray-400 sm:hidden">{formatDate(req.submittedAt)}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="hidden py-4 text-sm text-gray-500 sm:table-cell">{req.submittedDate}</td>
+                      <td className="hidden py-4 text-sm text-gray-500 sm:table-cell">
+                        {formatDate(req.submittedAt)}
+                      </td>
                       <td className="py-4 text-right">
                         <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
-                          <Link
-                            href={`/admin/employer-verification/${req.id}`}
-                            className="text-sm font-semibold text-[#8A38F5] hover:underline"
-                          >
-                            View Profile
-                          </Link>
                           <button
                             type="button"
                             onClick={() => setReviewing(req)}
@@ -228,21 +238,35 @@ function handleDecision(decision: "approve" | "reject") {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
             <div className="flex items-center gap-3">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${reviewing.iconBg}`}>
-                <Building2 size={20} className={reviewing.iconColor} />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#EDE7F8]">
+                {reviewing.logoUrl ? (
+                  <img src={reviewing.logoUrl} alt={reviewing.companyName} className="h-full w-full object-cover" />
+                ) : (
+                  <Building2 size={20} className="text-[#8A38F5]" />
+                )}
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900">{reviewing.company}</h3>
-                <p className="text-xs text-gray-400">{reviewing.industry}</p>
+                <h3 className="text-base font-bold text-gray-900">{reviewing.companyName}</h3>
+                <p className="text-xs text-gray-400">{reviewing.industry ?? "Industry not provided"}</p>
               </div>
             </div>
 
-            <p className="mt-4 text-sm text-gray-500">
-              Submitted on {reviewing.submittedDate}. Approve this employer to let them post jobs
-              and access candidate profiles, or reject if their information doesn&apos;t check out.
-            </p>
+            <div className="mt-4 flex flex-col gap-1 text-sm text-gray-500">
+              <p>Submitted on {formatDate(reviewing.submittedAt)}.</p>
+              {reviewing.contactPerson && <p>Contact: {reviewing.contactPerson} ({reviewing.email})</p>}
+              {reviewing.rcNumber && <p>RC Number: {reviewing.rcNumber}</p>}
+              {reviewing.website && <p>Website: {reviewing.website}</p>}
+            </div>
 
-            <div className="mt-6 flex gap-3">
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Reason for rejection (only needed if rejecting)"
+              rows={2}
+              className="mt-4 w-full resize-none rounded-xl border border-gray-200 p-3 text-sm text-gray-900 outline-none focus:border-[#8A38F5]"
+            />
+
+            <div className="mt-4 flex gap-3">
               <button
                 type="button"
                 onClick={() => handleDecision("reject")}
@@ -263,7 +287,10 @@ function handleDecision(decision: "approve" | "reject") {
 
             <button
               type="button"
-              onClick={() => setReviewing(null)}
+              onClick={() => {
+                setReviewing(null);
+                setRejectionReason("");
+              }}
               className="mt-3 w-full text-center text-sm text-gray-400 hover:text-gray-600"
             >
               Cancel
