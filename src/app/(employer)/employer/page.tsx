@@ -32,25 +32,24 @@ export default function EmployerDashboardPage() {
   const { session } = useSession();
   const [jobs, setJobs] = useState<EmployerJob[]>([]);
   const [applications, setApplications] = useState<ApplicationRecord[]>([]);
-
-  useEffect(() => {
+useEffect(() => {
   async function loadDashboardData() {
     if (!session?.email) return;
-    
-    // 1. Fetch the real company profile asynchronously
-    const profileRes = await companyProfileApi.getProfile();
-    
-    // 2. Extract the company name (fallback to session display name if it fails)
-    const companyName = (
-      profileRes.ok && profileRes.data?.companyName 
-        ? profileRes.data.companyName 
-        : (session.displayName ?? "")
-    ).trim().toLowerCase();
 
-    const allTalent = adminUsersApi.getAll().filter((u) => u.role === "talent");
-    
-    // ... continue with the rest of your filtering logic here using `companyName` ...
-    // (e.g., setStats, setRecentApplicants, etc.)
+    // 1. Real jobs — works today, employer-scoped by auth token.
+    const jobsRes = await employerJobsApi.getAll();
+    if (jobsRes.ok && jobsRes.data) {
+      setJobs(jobsRes.data);
+    } else {
+      setJobs([]);
+    }
+
+    // 2. Applications to this employer's jobs — no real endpoint exists yet.
+    // adminUsersApi.getAll() is admin-only and can't be used here; looping
+    // through every talent user to find matching applications was never a
+    // valid approach either. Leaving this empty until a real
+    // "my applications" (or similar) employer-scoped endpoint exists.
+    setApplications([]);
   }
 
   loadDashboardData();
