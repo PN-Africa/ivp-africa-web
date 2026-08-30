@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Mail, Phone, Globe, Building2 } from "lucide-react";
-import { adminUsersApi, type AdminUserView } from "@/lib/api/adminUsers";
+import { adminUsersApi, type AdminUserView, type AdminUserDetail } from "@/lib/api/adminUsers";
 import { adminNotesApi } from "@/lib/api/adminNotes";
-import { companyProfileApi } from "@/lib/api/companyProfile";
-import { employerJobsApi } from "@/lib/api/employerJob";
-import {auditLogsApi} from "@/lib/api/auditLogs";
 import { useSession } from "@/lib/auth/useSession";
+import { adminJobsApi } from "@/lib/api/adminJobs";
+
 type TabValue = "Overview" | "Job Listings" | "Hiring History" | "Billing" | "Admin Notes";
 const tabs: TabValue[] = ["Overview", "Job Listings", "Hiring History", "Billing", "Admin Notes"];
 
@@ -19,55 +18,75 @@ function getInitial(name: string) {
 export function EmployerDetailView({ user }: { user: AdminUserView }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabValue>("Overview");
-  const [current, setCurrent] = useState(user);
+  const [current, setCurrent] = useState<AdminUserDetail>(user as AdminUserDetail);
   const [note, setNote] = useState("");
   const { session } = useSession();
-  const company = companyProfileApi.get(user.email, user.displayName);
-  const jobs = employerJobsApi.getAll(user.email);
+  const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState<any[]>([]);
+
+  const company = {
+    companyName: current.employerProfile?.companyName ?? current.displayName,
+    industry: current.employerProfile?.industry ?? null,
+    location: current.employerProfile?.location ?? null,
+    contactEmail: current.email,
+    officeAddress: current.employerProfile?.officeAddress ?? null,
+    website: current.employerProfile?.website ?? null,
+    about: current.employerProfile?.description ?? null,
+    verified: current.employerProfile?.verificationStatus === "VERIFIED" ||
+          current.employerProfile?.verificationStatus === "APPROVED",};
 
   useEffect(() => {
-    setNote(adminNotesApi.get(user.id));
+    async function loadUser() {
+      setLoading(true);
+      const found = await adminUsersApi.getById(user.id);
+      if (found.ok && found.user) {
+        setCurrent(found.user);
+      }
+      setLoading(false);
+    }
+    loadUser();
   }, [user.id]);
 
-  function refresh() {
-    const found = adminUsersApi.getById(user.id);
-    if (found) setCurrent(found);
-  }
+  useEffect(() => {
+    async function loadJobs() {
+      const result = await adminJobsApi.getAll();
+      if (result.ok) {
+        const thisEmployersJobs = result.jobs.filter(
+          (job) => job.employer?.id === current.id
+        );
+        setJobs(thisEmployersJobs);
+      }
+    }
+    loadJobs();
+  }, [user.id, current.id]);
 
-  function handleToggleFlag() {
-    adminUsersApi.setFlag(current.id, !current.flagged);
-    refresh();
-  }
-
-  function handleToggleStatus() {
-    const nextStatus = current.status === "active" ? "suspended" : "active";
-    adminUsersApi.setStatus(current.id, nextStatus);
-     auditLogsApi.add(
-    session?.displayName ?? "Admin",
-    nextStatus === "suspended" ? "Suspended account" : "Reactivated account",
-    current.displayName
-  );
-    refresh();
+  async function refresh() {
+    const found = await adminUsersApi.getById(user.id);
+    if (found.ok && found.user) {
+      setCurrent(found.user);
+    }
   }
 
   function handleSaveNote() {
     adminNotesApi.save(user.id, note);
   }
-function formatDate(iso?: string) {
-  if (!iso) return "Not available";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
-function formatRelative(iso?: string) {
-  if (!iso) return "Never logged in";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const hours = Math.floor(diffMs / 3600_000);
-  if (hours < 1) return "Just now";
-  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} day${days !== 1 ? "s" : ""} ago`;
-}
-  const activeJobs = jobs.filter((j) => j.status === "active");
+  function formatDate(iso?: string) {
+    if (!iso) return "Not available";
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function formatRelative(iso?: string) {
+    if (!iso) return "Never logged in";
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const hours = Math.floor(diffMs / 3600_000);
+    if (hours < 1) return "Just now";
+    if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days !== 1 ? "s" : ""} ago`;
+  }
+
+  const activeJobs = jobs.filter((j) => j.status === "PUBLISHED");
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,12 +106,12 @@ function formatRelative(iso?: string) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#EDE7F8] text-xl font-bold text-[#8A38F5] sm:h-16 sm:w-16">
-            {user.avatarUrl ? (
-              <img src={user.avatarUrl} alt={company.companyName} className="h-full w-full object-cover" />
-            ) : (
-              getInitial(company.companyName)
-            )}
-          </div>
+              {current.employerProfile?.logoUrl ? (
+                <img src={current.employerProfile.logoUrl} alt={company.companyName} className="h-full w-full object-cover" />
+              ) : (
+                getInitial(company.companyName)
+              )}
+            </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-bold text-gray-900 sm:text-lg">{company.companyName}</h2>
@@ -136,28 +155,6 @@ function formatRelative(iso?: string) {
               >
                 {current.status === "active" ? "Active Account" : "Suspended"}
               </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleToggleFlag}
-                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${
-                  current.flagged
-                    ? "border-amber-300 bg-amber-50 text-amber-700"
-                    : "border-[#8A38F5] text-[#8A38F5] hover:bg-[#EDE7F8]"
-                }`}
-              >
-                {current.flagged ? "Unflag" : "Flag for Review"}
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleStatus}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold text-white transition-colors sm:px-4 sm:text-sm ${
-                  current.status === "active" ? "bg-red-500 hover:bg-red-600" : "bg-green-600 hover:bg-green-700"
-                }`}
-              >
-                {current.status === "active" ? "Suspend Account" : "Reactivate"}
-              </button>
             </div>
           </div>
         </div>
@@ -213,9 +210,7 @@ function formatRelative(iso?: string) {
                   <div key={job.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{job.title}</p>
-                      <p className="text-xs text-gray-400">
-                        {job.location} · {job.workMode}
-                      </p>
+                      <p className="text-xs text-gray-400">{job.location}</p>
                     </div>
                     <span className="text-xs font-medium text-gray-500 capitalize">{job.status}</span>
                   </div>

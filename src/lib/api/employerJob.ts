@@ -69,6 +69,7 @@ export const employerJobsApi = {
     const res = await apiFetch<any[]>("/api/v1/jobs/my-postings", { method: "GET" });
     if (!res.ok) {
     return { ok: false, message: res.message || "Failed to fetch jobs" };
+    console.log("my-jobs",res);
   }
   if (!res.data) {
     return { ok: false, message: "Failed to fetch jobs" };

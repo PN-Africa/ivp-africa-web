@@ -1,56 +1,64 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { adminNotificationsApi, type BroadcastHistoryEntry } from "@/lib/api/adminNotifications";
 
-interface Broadcast {
-  id: string;
-  message: string;
-  audience: string;
-  status: "Delivered" | "Draft" | "Sending";
-}
-
-const initialHistory: Broadcast[] = [
-  { id: "1", message: "Platform maintenance notice", audience: "All users", status: "Delivered" },
-  { id: "2", message: "New subscription plans available", audience: "Employers", status: "Draft" },
+const audienceOptions: { label: string; value: "ALL" | "TALENT" | "EMPLOYER" }[] = [
+  { label: "All Users", value: "ALL" },
+  { label: "Talent", value: "TALENT" },
+  { label: "Employers", value: "EMPLOYER" },
 ];
 
-const audienceOptions = ["All Users", "Talent", "Employers", "Admins"];
-
-const statusStyles: Record<Broadcast["status"], string> = {
-  Delivered: "bg-green-50 text-green-700",
-  Draft: "bg-amber-50 text-amber-700",
-  Sending: "bg-blue-50 text-blue-700",
-};
-
 export default function AdminNotificationsPage() {
-  const [audience, setAudience] = useState(audienceOptions[0]);
+  const [audience, setAudience] = useState<"ALL" | "TALENT" | "EMPLOYER">("ALL");
+  const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [history, setHistory] = useState<Broadcast[]>(initialHistory);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [history, setHistory] = useState<BroadcastHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  function loadHistory() {
+    setLoading(true);
+    setLoadError(null);
+    adminNotificationsApi.getHistory().then((result) => {
+      if (result.ok) {
+        setHistory(result.broadcasts);
+      } else {
+        setLoadError(result.message ?? "Failed to load broadcast history.");
+      }
+      setLoading(false);
+    });
+  }
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   async function handleSend() {
-    if (!message.trim()) return;
+    if (!title.trim() || !message.trim()) return;
 
-    const id = crypto.randomUUID();
-    const newBroadcast: Broadcast = {
-      id,
-      message: message.trim(),
-      audience,
-      status: "Sending",
-    };
-
-    setHistory((prev) => [newBroadcast, ...prev]);
     setSending(true);
+    setSendError(null);
 
-    // simulated send delay — swap for a real API call once one exists
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    const result = await adminNotificationsApi.broadcast(title.trim(), message.trim(), audience);
 
-    setHistory((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, status: "Delivered" as const } : b))
-    );
     setSending(false);
+
+    if (!result.ok) {
+      setSendError(result.message ?? "Failed to send broadcast.");
+      return;
+    }
+
+    setTitle("");
     setMessage("");
+    loadHistory();
+  }
+
+  function formatDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
   return (
@@ -67,15 +75,28 @@ export default function AdminNotificationsPage() {
         <h2 className="mb-4 text-sm font-bold text-gray-900 sm:text-base">Compose Platform Broadcast</h2>
 
         <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium text-gray-700">Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Broadcast title"
+            className="w-full rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#8A38F5] focus:bg-white"
+          />
+        </div>
+
+        <div className="mb-4">
           <label className="mb-1.5 block text-sm font-medium text-gray-700">Target Audience</label>
           <div className="relative">
             <select
               value={audience}
-              onChange={(e) => setAudience(e.target.value)}
+              onChange={(e) => setAudience(e.target.value as "ALL" | "TALENT" | "EMPLOYER")}
               className="w-full appearance-none rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 pr-10 text-sm text-gray-900 outline-none focus:border-[#8A38F5] focus:bg-white"
             >
               {audienceOptions.map((option) => (
-                <option key={option}>{option}</option>
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
               ))}
             </select>
             <ChevronDown
@@ -90,18 +111,20 @@ export default function AdminNotificationsPage() {
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Notification Message textarea"
+            placeholder="Notification message"
             rows={5}
             className="w-full resize-none rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:border-[#8A38F5] focus:bg-white"
           />
         </div>
 
+        {sendError && <p className="mt-3 text-sm text-red-500">{sendError}</p>}
+
         <div className="mt-4 flex justify-end">
           <button
             type="button"
             onClick={handleSend}
-            disabled={!message.trim() || sending}
-            className="rounded-xl bg-[#6C3CFF] px-6 py-2.5 text-sm font-semibold !text-white transition-colors hover:bg-[#7226e0] "
+            disabled={!title.trim() || !message.trim() || sending}
+            className="rounded-xl bg-[#6C3CFF] px-6 py-2.5 text-sm font-semibold !text-white transition-colors hover:bg-[#7226e0] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {sending ? "Sending…" : "Send Broadcast Alert"}
           </button>
@@ -112,30 +135,33 @@ export default function AdminNotificationsPage() {
       <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
         <h2 className="mb-4 text-sm font-bold text-gray-900 sm:text-base">Delivery History</h2>
 
-        {history.length === 0 ? (
+        {loading ? (
+          <p className="py-6 text-center text-sm text-gray-400">Loading broadcast history...</p>
+        ) : loadError ? (
+          <p className="py-6 text-center text-sm text-red-500">{loadError}</p>
+        ) : history.length === 0 ? (
           <p className="py-6 text-center text-sm text-gray-400">No broadcasts sent yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] text-left">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="py-3 pr-4 text-xs font-medium text-gray-400">Message</th>
+                  <th className="py-3 pr-4 text-xs font-medium text-gray-400">Title</th>
                   <th className="hidden py-3 pr-4 text-xs font-medium text-gray-400 sm:table-cell">Audience</th>
-                  <th className="py-3 text-right text-xs font-medium text-gray-400">Status</th>
+                  <th className="py-3 text-right text-xs font-medium text-gray-400">Sent</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {history.map((item) => (
                   <tr key={item.id} className="transition-colors hover:bg-gray-50">
                     <td className="py-3 pr-4">
-                      <p className="text-sm font-semibold text-gray-900">{item.message}</p>
-                      <p className="text-xs text-gray-400 sm:hidden">{item.audience}</p>
+                      <p className="text-sm font-semibold text-gray-900">{item.title}</p>
+                      <p className="text-xs text-gray-400">{item.message}</p>
+                      <p className="text-xs text-gray-400 sm:hidden">{item.targetAudience}</p>
                     </td>
-                    <td className="hidden py-3 pr-4 text-sm text-gray-500 sm:table-cell">{item.audience}</td>
-                    <td className="py-3 text-right">
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${statusStyles[item.status]}`}>
-                        {item.status}
-                      </span>
+                    <td className="hidden py-3 pr-4 text-sm text-gray-500 sm:table-cell">{item.targetAudience}</td>
+                    <td className="py-3 text-right text-sm text-gray-400 whitespace-nowrap">
+                      {formatDate(item.createdAt)}
                     </td>
                   </tr>
                 ))}

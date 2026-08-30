@@ -1,9 +1,6 @@
-// lib/utils/recommendations.ts
-import { jobs, type Job } from "@/app/(talent)/talent/jobs/job";
+import { talentJobsApi, type TalentJob } from "@/lib/utils/talentJobs";
 import type { CandidateProfileData } from "@/lib/types/Profile";
 
-// Internship Preferences uses role names; job.ts uses category names.
-// This bridges the two vocabularies so matching actually works.
 const roleToCategoryMap: Record<string, string> = {
   "Software Development": "Technology",
   "Data Analysis": "Data & AI",
@@ -21,20 +18,24 @@ const roleToCategoryMap: Record<string, string> = {
   "Healthcare & Medical": "Healthcare",
 };
 
-export function getRecommendedJobs(profile: CandidateProfileData | null, limit = 4): Job[] {
+export async function getRecommendedJobs(
+  profile: CandidateProfileData | null,
+  limit = 4
+): Promise<TalentJob[]> {
+  const allJobs = await talentJobsApi.getAll();
+
   const selectedRoles = profile?.internshipPreferences?.selectedRoles ?? [];
   const candidateLocation = profile?.personalInfo?.location?.trim().toLowerCase() ?? "";
 
-  // translate selected roles into the job categories they map to
   const targetCategories = selectedRoles
     .map((role) => roleToCategoryMap[role])
     .filter((category): category is string => Boolean(category));
 
   if (targetCategories.length === 0 && !candidateLocation) {
-    return [...jobs].sort((a, b) => a.postedDaysAgo - b.postedDaysAgo).slice(0, limit);
+    return [...allJobs].sort((a, b) => a.postedDaysAgo - b.postedDaysAgo).slice(0, limit);
   }
 
-  const scored = jobs.map((job) => {
+  const scored = allJobs.map((job) => {
     let score = 0;
 
     if (targetCategories.some((category) => category.toLowerCase() === job.category.toLowerCase())) {
@@ -57,5 +58,5 @@ export function getRecommendedJobs(profile: CandidateProfileData | null, limit =
     return matched.slice(0, limit);
   }
 
-  return [...jobs].sort((a, b) => a.postedDaysAgo - b.postedDaysAgo).slice(0, limit);
+  return [...allJobs].sort((a, b) => a.postedDaysAgo - b.postedDaysAgo).slice(0, limit);
 }

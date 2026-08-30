@@ -84,6 +84,7 @@ async function handleLogin(e: FormEvent) {
   const existingProfile = profileApi.get(result.user.email);
 
   session.set({
+    id: result.user.id,
     email: result.user.email,
     role: result.user.role,
     redirectPath: result.redirectPath,

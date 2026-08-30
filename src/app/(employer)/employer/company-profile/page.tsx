@@ -70,7 +70,7 @@ export default function CompanyProfilePage() {
       // 2. Fetch Jobs (FIXED)
       if (session?.email) {
         // Await the API call and extract the data property
-        const jobsRes = await employerJobsApi.getAll(session.email);
+        const jobsRes = await employerJobsApi.getAll();
         
         if (jobsRes.ok && Array.isArray(jobsRes.data)) {
           setJobs(jobsRes.data); // Set jobs to the actual array

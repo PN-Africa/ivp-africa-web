@@ -18,6 +18,7 @@ import { getProfileCompletion, type ChecklistItem } from "@/lib/utils/profileCom
 import { getRecommendedJobs } from "@/lib/utils/recommendations";
 import { getLatestUpdates, type UpdateItem } from "@/lib/utils/dashboardUpdates";
 import type { ApplicationRecord } from "@/lib/types/application";
+import { talentJobsApi, type TalentJob } from "@/lib/utils/talentJobs";
 import type { Job } from "@/app/(talent)/talent/jobs/job";
  
 import { profileCompletionApi } from "@/lib/api/profileCompletion";
@@ -48,26 +49,36 @@ function TalentDashboard() {
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [completionPercentage, setCompletionPercentage] = useState(0);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
-  const [recommendedJobs, setRecommendedJobs] = useState<Job[]>([]);
+ 
   const [updates, setUpdates] = useState<UpdateItem[]>([]);
+  const [recommendedJobs, setRecommendedJobs] = useState<TalentJob[]>([]);
 
-  useEffect(() => {
-    if (!session?.email) return;
 
-    setApplications(applicationsApi.getAll(session.email));
-    setSavedCount(savedJobsApi.getAll(session.email).length);
+useEffect(() => {
+  if (!session?.email) return;
+  const email = session.email;
 
-    const profile = profileApi.get(session.email);
+  async function loadDashboard() {
+    setApplications(applicationsApi.getAll(email));
+    setSavedCount(savedJobsApi.getAll(email).length);
+
+    const profile = profileApi.get(email);
     const { checklist: items } = getProfileCompletion(profile);
     setChecklist(items);
 
-    const completion = profileCompletionApi.get(session.email);
+    const completion = profileCompletionApi.get(email);
     setCompletionPercentage(completion.profilePercent);
     setIsProfileComplete(completion.isComplete);
 
-    setRecommendedJobs(getRecommendedJobs(profile));
-    setUpdates(getLatestUpdates(session.email));
-  }, [session?.email]);
+    const recommended = await getRecommendedJobs(profile);
+    setRecommendedJobs(recommended);
+
+    const recentUpdates = await getLatestUpdates(email);
+    setUpdates(recentUpdates);
+  }
+
+  loadDashboard();
+}, [session?.email]);
 
   const shortlistedCount = applications.filter((a) => a.status === "shortlisted").length;
   const interviewCount = applications.filter((a) => a.status === "interview").length;

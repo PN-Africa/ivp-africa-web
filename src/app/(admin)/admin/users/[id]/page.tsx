@@ -13,16 +13,30 @@ export default function AdminUserProfilePage() {
   const id = params?.id;
   const [user, setUser] = useState<AdminUserView | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    const found = adminUsersApi.getById(id);
-    if (!found) {
-      setNotFound(true);
-      return;
+
+    async function load(userId: string) {
+      setLoading(true);
+      const found = await adminUsersApi.getById(userId);
+      setLoading(false);
+
+      if (!found.ok || !found.user) {
+        setNotFound(true);
+        return;
+      }
+
+      setUser(found.user);
     }
-    setUser(found);
+
+    load(id);
   }, [id]);
+
+  if (loading) {
+    return <p className="text-sm text-gray-400">Loading...</p>;
+  }
 
   if (notFound) {
     return (

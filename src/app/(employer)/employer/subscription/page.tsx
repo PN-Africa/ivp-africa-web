@@ -3,58 +3,63 @@
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
-import { employerJobsApi } from "@/lib/api/employerJob";
-import { subscriptionApi, RealPlan, RealSubscription, RealPaymentRecord } from "@/lib/api/subscription";
+import { 
+  subscriptionApi, 
+  RealPlan, 
+  RealSubscription, 
+  RealPaymentRecord,
+  SubscriptionUsageResponse
+} from "@/lib/api/subscription";
 import { generateInvoicePdf } from "@/lib/utils/generateInvoicePdf";
 
 function formatDate(iso: string) {
-  if (!iso) return "";
+  if (!iso) return "N/A";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function getLimitsForPlan(planName: string) {
-  const name = planName.toLowerCase();
-  if (name.includes("starter") || name.includes("free")) return { jobLimit: 3, appLimit: 50 };
-  if (name.includes("professional") || name.includes("pro")) return { jobLimit: 15, appLimit: null };
-  return { jobLimit: null, appLimit: null }; // Enterprise / Unlimited
 }
 
 export default function SubscriptionPage() {
   const { session } = useSession();
+  
   const [plans, setPlans] = useState<RealPlan[]>([]);
   const [currentSub, setCurrentSub] = useState<RealSubscription | null>(null);
-  const [payments, setPayments] = useState<RealPaymentRecord[]>([]);
-  const [activeJobCount, setActiveJobCount] = useState(0);
+  const [paymentHistory, setPaymentHistory] = useState<RealPaymentRecord[]>([]);
+  const [usageData, setUsageData] = useState<SubscriptionUsageResponse | null>(null);
+  
   const [showPlanList, setShowPlanList] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   async function refresh() {
     if (!session?.email) return;
 
     try {
-      // 1. Fetch available plans
-      const plansRes = await subscriptionApi.getPlans();
-      const fetchedPlans = Array.isArray(plansRes.data) ? plansRes.data : Array.isArray(plansRes) ? plansRes : [];
-      setPlans(fetchedPlans);
+      const [plansRes, subRes, historyRes, usageRes] = await Promise.all([
+        subscriptionApi.getPlans(),
+        subscriptionApi.getCurrent(),
+        subscriptionApi.getPaymentHistory(),
+        subscriptionApi.getUsage(),
+      ]);
 
-      // 2. Fetch current subscription
-      const subRes = await subscriptionApi.getCurrent();
-      setCurrentSub(subRes.data ? subRes.data : subRes);
+      // Unwrap .data on success
+      if (plansRes.ok) {
+        setPlans(Array.isArray(plansRes.data) ? plansRes.data : []);
+      }
 
-      // 3. Fetch active jobs to calculate quota usage
-      const jobsRes = await employerJobsApi.getAll(session.email);
-      const jobsArray = Array.isArray(jobsRes.data) ? jobsRes.data : Array.isArray(jobsRes) ? jobsRes : [];
-      setActiveJobCount(jobsArray.filter((j: any) => j.status === "active").length);
+      if (subRes.ok) {
+        setCurrentSub(subRes.data);
+      }
 
-      // 4. Fetch actual Payment History
-      const historyRes = await subscriptionApi.getPaymentHistory();
-      const historyArray = Array.isArray(historyRes.data) ? historyRes.data : Array.isArray(historyRes) ? historyRes : [];
-      setPayments(historyArray);
+      if (historyRes.ok) {
+        setPaymentHistory(Array.isArray(historyRes.data) ? historyRes.data : []);
+      }
+
+      if (usageRes.ok) {
+        setUsageData(usageRes.data);
+      }
 
     } catch (error) {
       console.error("Failed to refresh subscription data:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }
 
@@ -69,36 +74,33 @@ export default function SubscriptionPage() {
     }
     
     try {
-      // Fire payment initialization
       const res = await subscriptionApi.initializePayment(planId);
       
-      // Handle nested .data depending on how apiFetch parses JSON
-      const paymentUrl = (res as any).data?.paymentUrl || (res as any).paymentUrl;
-      
-      if (paymentUrl) {
-        // Redirect browser to Paystack checkout
-        window.location.href = paymentUrl;
-      } else {
-        alert("Could not initialize checkout. Please try again.");
+      // Check .ok and extract paymentUrl from .data
+      if (res.ok && res.data?.paymentUrl) {
+        window.location.assign(res.data.paymentUrl);
+      } else if (!res.ok) {
+        console.error("Payment initialization failed:", res.message);
       }
-    } catch (err) {
-      console.error("Failed to initialize checkout", err);
-      alert("Failed to process payment request. Please try again.");
+    } catch (error) {
+      console.error("Failed to initialize payment:", error);
     } finally {
       setShowPlanList(false);
     }
   }
 
-  if (loading) {
-    return <div className="p-8 text-center text-sm text-gray-500 animate-pulse">Loading subscription details...</div>;
-  }
+  if (isLoading) return <div className="p-6 text-gray-500">Loading subscription details...</div>;
 
-  const activePlan = currentSub?.plan ?? plans[0]; 
-  if (!activePlan) return null;
+  const currentPlanDetails = currentSub 
+    ? (plans.find((p) => p.id === currentSub.planId) ?? currentSub.plan)
+    : null;
 
-  const limits = getLimitsForPlan(activePlan.name);
-  const jobLimitLabel = limits.jobLimit === null ? "Unlimited" : `${limits.jobLimit}`;
-  const jobUsagePercent = limits.jobLimit === null ? 0 : Math.min(100, (activeJobCount / limits.jobLimit) * 100);
+  const jobLimitInfo = usageData?.limits?.jobs;
+  const jobPercentage = jobLimitInfo 
+    ? (jobLimitInfo.isUnlimited 
+        ? 100 
+        : Math.min((jobLimitInfo.used / jobLimitInfo.total) * 100, 100))
+    : 0;
 
   return (
     <>
@@ -145,109 +147,106 @@ export default function SubscriptionPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 mt-6">
-        {/* Current plan + payment history */}
         <div className="flex flex-col gap-4 lg:col-span-2">
+          
+          {/* Current plan card */}
           <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-gray-900 sm:text-base">{activePlan.name}</p>
-                  {currentSub?.status === "EXPIRED" && (
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 font-semibold">Expired</span>
-                  )}
+            {currentSub ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 sm:text-base">{currentPlanDetails?.name || "Current Plan"}</p>
+                    <p className="text-xs text-gray-400">Next renewal on {formatDate(currentSub.endDate)}</p>
+                    <p className="text-xs font-medium mt-1">
+                      Status: <span className={currentSub.status === "ACTIVE" ? "text-green-600" : "text-red-600"}>{currentSub.status}</span>
+                    </p>
+                  </div>
+                  <p className="text-lg font-bold text-[#8A38F5] sm:text-xl">
+                    ${currentPlanDetails?.price || 0}
+                    <span className="text-sm font-medium text-gray-400">/mo</span>
+                  </p>
                 </div>
-                {currentSub?.endDate && currentSub?.status === "ACTIVE" ? (
-                  <p className="text-xs text-gray-400">Next renewal on {formatDate(currentSub.endDate)}</p>
-                ) : (
-                   <p className="text-xs text-gray-400">No active renewal schedule</p>
+
+                {jobLimitInfo && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs text-gray-600 sm:text-sm">
+                      <span>Jobs Posted This Cycle</span>
+                      <span className="font-medium">
+                        {jobLimitInfo.used} / {jobLimitInfo.isUnlimited ? "Unlimited" : jobLimitInfo.total} Jobs
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-2 w-full rounded-full bg-gray-100">
+                      <div
+                        className={`h-2 rounded-full ${
+                          jobPercentage >= 90 ? 'bg-red-500' : 'bg-[#8A38F5]'
+                        } transition-all duration-500 ease-in-out`}
+                        style={{ width: `${jobPercentage}%` }} 
+                      />
+                    </div>
+                    {jobPercentage >= 90 && !jobLimitInfo.isUnlimited && (
+                      <p className="mt-2 text-xs text-red-500">You are approaching your plan limit.</p>
+                    )}
+                  </div>
                 )}
-              </div>
-              <p className="text-lg font-bold text-[#8A38F5] sm:text-xl">
-                ${activePlan.price}
-                <span className="text-sm font-medium text-gray-400">/mo</span>
-              </p>
-            </div>
-
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs text-gray-600 sm:text-sm">
-                <span>Active Jobs Posted</span>
-                <span>
-                  {activeJobCount} / {jobLimitLabel} Jobs
-                </span>
-              </div>
-              <div className="mt-1.5 h-2 rounded-full bg-gray-100">
-                <div
-                  className="h-2 rounded-full bg-[#8A38F5]"
-                  style={{ width: `${jobUsagePercent || (limits.jobLimit === null ? 15 : 0)}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-gray-600 sm:text-sm">
-                <span>Application Limit</span>
-                <span>
-                  {limits.appLimit === null ? "Unlimited Applications" : `${limits.appLimit} per month`}
-                </span>
-              </div>
-              <div className="mt-1.5 h-2 rounded-full bg-gray-100">
-                <div className="h-2 rounded-full bg-emerald-500" style={{ width: limits.appLimit === null ? "15%" : "0%" }} />
-              </div>
-            </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">No active subscription found.</p>
+            )}
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
             <h2 className="text-sm font-bold text-gray-900 sm:text-base">Payment History</h2>
-            {payments.length === 0 ? (
-              <p className="text-xs text-gray-500 mt-4">No payment history available.</p>
-            ) : (
-              <div className="mt-3 flex flex-col divide-y divide-gray-100">
-                {payments.map((payment) => (
+            <div className="mt-3 flex flex-col divide-y divide-gray-100">
+              {paymentHistory.length === 0 ? (
+                <p className="text-sm text-gray-500 py-3">No payment history found.</p>
+              ) : (
+                paymentHistory.map((payment) => (
                   <div key={payment.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-900">{payment.plan.name} - Subscription</p>
+                      <p className="truncate text-sm font-medium text-gray-900">
+                        {payment.plan?.name || "Subscription"} Plan
+                      </p>
                       <p className="text-xs text-gray-400">{formatDate(payment.createdAt)} • Ref: {payment.reference}</p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      <span className="text-sm font-semibold text-gray-900">
-                        ${Number(payment.amount).toFixed(2)}
-                      </span>
+                      <span className="text-sm font-semibold text-gray-900">${Number(payment.amount).toFixed(2)}</span>
                       <span
                         className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                          payment.status === "SUCCESS" 
-                            ? "bg-green-50 text-green-700" 
-                            : payment.status === "PENDING"
-                            ? "bg-yellow-50 text-yellow-700"
-                            : "bg-red-50 text-red-600"
+                          payment.status === "SUCCESS" ? "bg-green-50 text-green-700" : 
+                          payment.status === "PENDING" ? "bg-yellow-50 text-yellow-700" : "bg-red-50 text-red-600"
                         }`}
                       >
-                        {payment.status}
+                        {payment.status === "SUCCESS" ? "Success" : payment.status === "PENDING" ? "Pending" : "Failed"}
                       </span>
-                      {payment.status === "SUCCESS" && (
-                        <button
-                          type="button"
-                          onClick={() => generateInvoicePdf({
-                            id: payment.reference, 
-                            description: `${payment.plan.name} - Subscription`, 
-                            amount: Number(payment.amount), 
-                            date: payment.createdAt
-                          } as any, session?.displayName ?? "Company")}
-                          className="text-xs font-medium text-[#8A38F5] hover:underline"
-                        >
-                          Download PDF
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          generateInvoicePdf(
+                            {
+                              id: payment.id,
+                              description: `${payment.plan?.name || "Subscription"} Plan`,
+                              date: payment.createdAt,
+                              amount: Number(payment.amount),
+                              status: payment.status.toLowerCase()
+                            }, 
+                            session?.displayName ?? "Company"
+                          );
+                        }}
+                        className="text-xs font-medium text-[#8A38F5] hover:underline"
+                      >
+                        Download PDF
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Upgrade Plan Options */}
+        {/* Available Plans */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
-          <h2 className="text-sm font-bold text-gray-900 sm:text-base">Upgrade Plan Options</h2>
+          <h2 className="text-sm font-bold text-gray-900 sm:text-base">Available Plans</h2>
           <div className="mt-3 flex flex-col gap-3">
             {plans.map((plan) => {
               const isActive = plan.id === currentSub?.planId;
@@ -269,8 +268,8 @@ export default function SubscriptionPage() {
                     <span className="text-xs font-medium text-gray-400">/mo</span>
                   </p>
                   <ul className="mt-2 flex flex-col gap-1.5">
-                    {plan.benefits?.map((benefit, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-600">
+                    {plan.benefits?.map((benefit) => (
+                      <li key={benefit} className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Check size={12} className="shrink-0 text-green-600" />
                         {benefit}
                       </li>

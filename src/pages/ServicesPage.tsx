@@ -20,7 +20,7 @@ import {
    
 } from 'react-icons/fa';
 import Button from '../components/common/Button';
-import { SERVICES, CONTACT_INFO } from '../utils/constants';
+import { SERVICES } from '../utils/constants';
 import type { Service } from '../types';
 
 // Expanded icon map to catch more potential service string names

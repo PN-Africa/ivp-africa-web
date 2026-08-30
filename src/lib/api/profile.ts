@@ -2,6 +2,7 @@ import type { CandidateProfileData } from "@/lib/types/Profile";
 import { session } from "@/lib/auth/session";
 import { apiFetch, apiFetchMultipart } from "./httpClient";
 const STORAGE_PREFIX = "ivp_profile_";
+
 interface ProfileCompletionMeta {
   profilePercent?: number;
   isComplete?: boolean;
@@ -46,6 +47,8 @@ export const ProfileApi_real ={
     formData,
     { method: "PUT", headers: authHeaders() }
   );
+
+console.log("updatePersonalInfo raw result:", result);
   return result.ok
     ? { ok: true as const, profilePercent: result.data.profilePercent, isComplete: result.data.isComplete }
     : { ok: false as const, message: result.message };
@@ -91,7 +94,10 @@ updateSkills: async (input: {
   console.log("===============================");
 
   const result = await apiFetchMultipart<
-    { message?: string } & ProfileCompletionMeta
+   {
+      message?: string;
+      profile?: { resumeUrl?: string };
+    } & ProfileCompletionMeta
   >("/api/v1/talent/profile/skills", formData, {
     method: "PUT",
     headers: authHeaders(),
@@ -104,6 +110,7 @@ updateSkills: async (input: {
         ok: true as const,
         profilePercent: result.data.profilePercent,
         isComplete: result.data.isComplete,
+        resumeUrl: result.data.profile?.resumeUrl,
       }
     : {
         ok: false as const,

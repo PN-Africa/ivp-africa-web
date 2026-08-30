@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Mail, Phone,  Globe, GraduationCap, Languages, Briefcase } from "lucide-react";
-import { adminUsersApi, type AdminUserView } from "@/lib/api/adminUsers";
+import { ArrowLeft, Mail, Phone, GraduationCap, Languages, Briefcase } from "lucide-react";
+import { adminUsersApi, type AdminUserView, type AdminUserDetail } from "@/lib/api/adminUsers";
 import { adminNotesApi } from "@/lib/api/adminNotes";
-import { profileApi } from "@/lib/api/profile";
-import { applicationsApi } from "@/lib/api/applications";
-import {auditLogsApi} from "@/lib/api/auditLogs";
-
+import {    adminAuditLogsApi } from "@/lib/api/auditLogs";
 import { useSession } from "@/lib/auth/useSession";
+
 type TabValue = "Overview" | "Resume" | "Skills" | "Activity" | "Admin Notes";
 const tabs: TabValue[] = ["Overview", "Resume", "Skills", "Activity", "Admin Notes"];
 
@@ -20,70 +18,102 @@ function getInitials(name: string) {
 export function CandidateDetailView({ user }: { user: AdminUserView }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabValue>("Overview");
-  const [current, setCurrent] = useState(user);
+  const [current, setCurrent] = useState<AdminUserDetail>(user as AdminUserDetail);
+  const [loading, setLoading] = useState(true);
   const [note, setNote] = useState("");
-  const { session } = useSession();
-  // Pull real profile data if this candidate has one saved in this browser's storage
-  const realProfile = profileApi.get(user.email);
-  const realApplications = applicationsApi.getAll(user.email);
+  const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+const [resending, setResending] = useState(false);
+const [resettingPassword, setResettingPassword] = useState(false);
+
+  useEffect(() => {
+    async function loadCandidate() {
+      setLoading(true);
+      const found = await adminUsersApi.getById(user.id);
+      if (found.ok && found.user) {
+        setCurrent(found.user);
+      }
+      setLoading(false);
+    }
+    loadCandidate();
+  }, [user.id]);
 
   useEffect(() => {
     setNote(adminNotesApi.get(user.id));
   }, [user.id]);
 
-  function refresh() {
-    const found = adminUsersApi.getById(user.id);
-    if (found) setCurrent(found);
+  async function refresh() {
+    const found = await adminUsersApi.getById(user.id);
+    if (found.ok && found.user) {
+      setCurrent(found.user);
+    }
   }
 
-  function handleToggleFlag() {
-    adminUsersApi.setFlag(current.id, !current.flagged);
-    refresh();
-  }
+ async function handleToggleStatus() {
+  const nextStatus = current.status === "active" ? "suspended" : "active";
+  const result = await adminUsersApi.setStatus(current.id, nextStatus);
 
-  function handleToggleStatus() {
-    const nextStatus = current.status === "active" ? "suspended" : "active";
-    adminUsersApi.setStatus(current.id, nextStatus);
-    auditLogsApi.add(
-    session?.displayName ?? "Admin",
-    nextStatus === "suspended" ? "Suspended account" : "Reactivated account",
-    current.displayName
-  );
-    refresh();
+  if (result.ok) {
+    await refresh();
+  } else {
+    console.error("Failed to update status:", result.message);
   }
+}
+async function handleResendVerification() {
+  setResending(true);
+  setActionMessage(null);
+  const result = await adminUsersApi.resendVerification(current.id);
+  setResending(false);
 
+  if (result.ok) {
+    setActionMessage({ type: "success", text: result.message ?? "Verification email resent." });
+  } else {
+    setActionMessage({ type: "error", text: result.message ?? "Failed to resend verification." });
+  }
+}
+
+async function handleResetPassword() {
+  setResettingPassword(true);
+  setActionMessage(null);
+  const result = await adminUsersApi.resetPassword(current.id);
+  setResettingPassword(false);
+
+  if (result.ok) {
+    setActionMessage({ type: "success", text: result.message ?? "Password reset email sent." });
+  } else {
+    setActionMessage({ type: "error", text: result.message ?? "Failed to send password reset." });
+  }
+}
   function handleSaveNote() {
     adminNotesApi.save(user.id, note);
   }
 
   function formatDate(iso?: string) {
-  if (!iso) return "Not available";
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+    if (!iso) return "Not available";
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
 
-function formatRelative(iso?: string) {
-  if (!iso) return "Never logged in";
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const hours = Math.floor(diffMs / 3600_000);
-  if (hours < 1) return "Just now";
-  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} day${days !== 1 ? "s" : ""} ago`;
-}
-  const skills = realProfile?.skillsAndDocuments?.skills.filter((s) => s.trim() !== "") ?? [];
-  const education = realProfile?.education;
-  const experience = realProfile?.experience;
-  const resumeUrl = realProfile?.skillsAndDocuments?.resumeUrl;
-  const completionPercent = realProfile
+  function formatRelative(iso?: string) {
+    if (!iso) return "Never logged in";
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const hours = Math.floor(diffMs / 3600_000);
+    if (hours < 1) return "Just now";
+    if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days !== 1 ? "s" : ""} ago`;
+  }
+
+  // Real data — nested directly in GET /admin/users/:id, no separate lookup needed.
+  const skills = current.talentProfile?.skills?.filter((s) => s.trim() !== "") ?? [];
+  const certifications = current.talentProfile?.certifications ?? [];
+  const resumeUrl = current.talentProfile?.resumeUrl;
+  const bio = current.talentProfile?.bio;
+  const location = current.talentProfile?.location;
+  const phoneNumber = current.talentProfile?.phoneNumber;
+  const professionalTitle = current.talentProfile?.professionalTitle;
+  const profileImageUrl = current.talentProfile?.profileImageUrl;
+  const completionPercent = current.talentProfile
     ? Math.round(
-        ([
-          realProfile.personalInfo?.fullName,
-          education?.institution,
-          skills.length > 0,
-          resumeUrl,
-        ].filter(Boolean).length /
-          4) *
-          100
+        ([current.displayName, location, skills.length > 0, resumeUrl].filter(Boolean).length / 4) * 100
       )
     : 0;
 
@@ -107,43 +137,33 @@ function formatRelative(iso?: string) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#EDE7F8] text-lg font-bold text-[#8A38F5] sm:h-16 sm:w-16">
-                {realProfile?.personalInfo?.avatarUrl ? (
-                  <img
-                    src={realProfile.personalInfo.avatarUrl}
-                    alt={current.displayName}
-                    className="h-14 w-14 rounded-full object-cover sm:h-16 sm:w-16"
-                  />
-                ) : (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#EDE7F8] text-lg font-bold text-[#8A38F5] sm:h-16 sm:w-16">
-                    {getInitials(current.displayName)}
-                  </div>
-                )}
+              {profileImageUrl ? (
+                <img
+                  src={profileImageUrl}
+                  alt={current.displayName}
+                  className="h-14 w-14 rounded-full object-cover sm:h-16 sm:w-16"
+                />
+              ) : (
+                getInitials(current.displayName)
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-bold text-gray-900 sm:text-lg">{current.displayName}</h2>
-                <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-                  Available immediately
-                </span>
               </div>
               <p className="mt-0.5 text-xs text-gray-500 sm:text-sm">
-                {realProfile?.personalInfo?.location || "Location not provided"}
+                {professionalTitle || "Title not provided"}
+                {location && ` · ${location}`}
               </p>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
                   <Mail size={12} /> {current.email}
                 </span>
-                {realProfile?.personalInfo?.whatsapp && (
+                {phoneNumber && (
                   <span className="flex items-center gap-1">
-                    <Phone size={12} /> {realProfile.personalInfo.whatsapp}
+                    <Phone size={12} /> {phoneNumber}
                   </span>
                 )}
-                <span className="flex items-center gap-1 text-[#8A38F5]">
-                  {/* <Linkedin size={12} /> LinkedIn */}
-                </span>
-                <span className="flex items-center gap-1 text-[#8A38F5]">
-                  <Globe size={12} /> Portfolio
-                </span>
               </div>
             </div>
           </div>
@@ -161,28 +181,38 @@ function formatRelative(iso?: string) {
                 {current.status === "active" ? "Active Account" : "Suspended"}
               </span>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleToggleFlag}
-                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${
-                  current.flagged
-                    ? "border-amber-300 bg-amber-50 text-amber-700"
-                    : "border-[#8A38F5] text-[#8A38F5] hover:bg-[#EDE7F8]"
-                }`}
-              >
-                {current.flagged ? "Unflag" : "Flag for Review"}
-              </button>
-              <button
-                type="button"
-                onClick={handleToggleStatus}
-                className={`rounded-xl px-3 py-2 text-xs font-semibold text-white transition-colors sm:px-4 sm:text-sm ${
-                  current.status === "active" ? "bg-red-500 hover:bg-red-600" : "bg-green-600 hover:bg-green-700"
-                }`}
-              >
-                {current.status === "active" ? "Suspend Account" : "Reactivate"}
-              </button>
-            </div>
+           <div className="flex flex-wrap gap-2">
+  <button
+    type="button"
+    onClick={handleToggleStatus}
+    className={`rounded-xl px-3 py-2 text-xs font-semibold text-white transition-colors sm:px-4 sm:text-sm ${
+      current.status === "active" ? "bg-red-500 hover:bg-red-600" : "bg-green-600 hover:bg-green-700"
+    }`}
+  >
+    {current.status === "active" ? "Suspend Account" : "Reactivate"}
+  </button>
+  <button
+    type="button"
+    onClick={handleResendVerification}
+    disabled={resending}
+    className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:text-sm"
+  >
+    {resending ? "Sending…" : "Resend Verification"}
+  </button>
+  <button
+    type="button"
+    onClick={handleResetPassword}
+    disabled={resettingPassword}
+    className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 sm:text-sm"
+  >
+    {resettingPassword ? "Sending…" : "Reset Password"}
+  </button>
+</div>
+{actionMessage && (
+  <p className={`mt-2 text-xs ${actionMessage.type === "success" ? "text-green-600" : "text-red-500"}`}>
+    {actionMessage.text}
+  </p>
+)}
           </div>
         </div>
       </div>
@@ -210,17 +240,16 @@ function formatRelative(iso?: string) {
               <div className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5">
                 <h3 className="text-sm font-bold text-gray-900">About Candidate</h3>
                 <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                  {realProfile ? "Profile submitted by candidate." : "No about section provided yet."}
+                  {bio || "No about section provided yet."}
                 </p>
-                {education?.institution && (
-                  <div className="mt-4 border-t border-gray-100 pt-4">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-900">
-                      <GraduationCap size={13} /> Education & Credentials
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-gray-900">{education.courseOfStudy}</p>
-                    <p className="text-xs text-gray-400">{education.institution}</p>
-                  </div>
-                )}
+                {/* Education not available from this endpoint yet — backend has no
+                    education fields on talentProfile currently. */}
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-900">
+                    <GraduationCap size={13} /> Education & Credentials
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">Not available yet.</p>
+                </div>
                 <div className="mt-4 border-t border-gray-100 pt-4">
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-900">
                     <Languages size={13} /> Languages
@@ -247,12 +276,18 @@ function formatRelative(iso?: string) {
 
                 <div className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5">
                   <h3 className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-                    <Briefcase size={14} /> Experience
+                    <Briefcase size={14} /> Certifications
                   </h3>
-                  {experience?.hasInternship ? (
-                    <p className="mt-2 text-sm text-gray-600">Has completed at least one internship.</p>
+                  {certifications.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {certifications.map((cert) => (
+                        <span key={cert} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                          {cert}
+                        </span>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="mt-2 text-sm text-gray-400">No prior internship experience recorded.</p>
+                    <p className="mt-2 text-sm text-gray-400">No certifications recorded.</p>
                   )}
                 </div>
               </div>
@@ -263,7 +298,7 @@ function formatRelative(iso?: string) {
             <div>
               {resumeUrl ? (
                 
-                <a href={resumeUrl}
+                 <a href={resumeUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-2 rounded-xl bg-[#EDE7F8] px-4 py-2.5 text-sm font-semibold text-[#8A38F5] hover:bg-[#DCCFF5]"
@@ -292,19 +327,11 @@ function formatRelative(iso?: string) {
 
           {activeTab === "Activity" && (
             <div className="flex flex-col gap-2">
-              {realApplications.length > 0 ? (
-                realApplications.map((app) => (
-                  <div key={app.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{app.jobTitle}</p>
-                      <p className="text-xs text-gray-400">{app.company}</p>
-                    </div>
-                    <span className="text-xs text-gray-400">{app.status}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="py-8 text-center text-sm text-gray-400">No application activity found.</p>
-              )}
+              {/* No admin endpoint exists yet for a candidate's application
+                  history — needs backend support before this can show real data. */}
+              <p className="py-8 text-center text-sm text-gray-400">
+                Application activity is not available yet.
+              </p>
             </div>
           )}
 
@@ -335,18 +362,15 @@ function formatRelative(iso?: string) {
       {/* Platform diagnostics */}
       <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
         <h3 className="text-sm font-bold text-gray-900">Platform Diagnostics & Activity</h3>
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div>
+            
             <p className="text-[10px] text-gray-400 uppercase">Account Created</p>
             <p className="mt-1 text-sm font-semibold text-gray-900">{formatDate(current.createdAt)}</p>
-            </div>
-            <div>
+          </div>
+          <div>
             <p className="text-[10px] text-gray-400 uppercase">Last Login Activity</p>
             <p className="mt-1 text-sm font-semibold text-gray-900">{formatRelative(current.lastLoginAt)}</p>
-            </div>
-          <div>
-            <p className="text-[10px] text-gray-400 uppercase">Total Applications</p>
-            <p className="mt-1 text-sm font-semibold text-[#8A38F5]">{realApplications.length} submissions</p>
           </div>
           <div>
             <p className="text-[10px] text-gray-400 uppercase">Profile Completeness</p>

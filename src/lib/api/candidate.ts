@@ -14,7 +14,6 @@ export interface EmployerCandidate {
   name: string;
   role: string;
   stage: PipelineStage;
-  jobTitle: string;
   appliedAt: string;
   location: string;
   email: string;
@@ -161,7 +160,6 @@ export const employerCandidatesApi = {
     const backendStatus = STAGE_TO_BACKEND_STATUS[stage] || stage;
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
 
-    // Correct URL matching @Patch(':id/applicants/:applicationId/status')
     const response = await fetch(
       `${baseUrl}/api/v1/jobs/${jobId}/applicants/${applicationId}/status`,
       {

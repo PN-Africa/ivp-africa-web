@@ -45,15 +45,39 @@ function FilterCheckbox({ label, checked, onChange }: { label: string; checked: 
 
 function JobsContent() {
  
+  
   const [allJobs, setAllJobs] = useState<TalentJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
  const searchParams = useSearchParams();
+
 const searchQuery = searchParams?.get("search") ?? "";
 const [query, setQuery] = useState(searchQuery);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  useEffect(() => {
-     talentJobsApi.getAll().then(setAllJobs);
+ useEffect(() => {
+    const loadJobs = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const jobs = await talentJobsApi.getAll();
+
+        setAllJobs(jobs);
+      } catch (err) {
+        console.error("Failed to load jobs:", err);
+
+        setError(
+          "Unable to load jobs. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadJobs();
   }, []);
 
   useEffect(() => {
@@ -113,9 +137,28 @@ const [query, setQuery] = useState(searchQuery);
           </div>
         </div>
 
-        <div className="flex flex-col gap-2.5 sm:gap-4">
-          <p className="text-xs text-gray-400 sm:text-sm">{filteredJobs.length} jobs found</p>
+<div className="flex flex-col gap-2.5 sm:gap-4">
+  {loading && (
+    <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center">
+      <p className="text-sm text-gray-400">
+        Loading jobs...
+      </p>
+    </div>
+  )}
 
+  {!loading && error && (
+    <div className="rounded-2xl border border-red-100 bg-red-50 p-8 text-center">
+      <p className="text-sm text-red-600">
+        {error}
+      </p>
+    </div>
+  )}
+
+  {!loading && !error && (
+    <p className="text-xs text-gray-400 sm:text-sm">
+      {filteredJobs.length} jobs found
+    </p>
+  )}
           {filteredJobs.map((job) => (
             <Link
               key={job.id}
@@ -129,11 +172,7 @@ const [query, setQuery] = useState(searchQuery);
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="truncate text-xs font-bold text-gray-900 sm:text-base">{job.title}</p>
-                    {job.source === "employer" && (
-                      <span className="shrink-0 rounded-full bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700 sm:text-[10px]">
-                        New
-                      </span>
-                    )}
+                    
                   </div>
                   <p className="mt-0.5 truncate text-[10px] text-gray-500 sm:text-sm">
                     {job.company} · {job.location}

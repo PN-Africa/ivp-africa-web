@@ -189,48 +189,49 @@ export default function SignUpFormSection() {
     setStep("verify");
   }
 
-  async function handleVerify(e: FormEvent) {
-    e.preventDefault();
-    setOtpError(null);
+  // async function handleVerify(e: FormEvent) {
+  //   e.preventDefault();
+  //   setOtpError(null);
 
-    if (otp.trim().length !== 6) {
-      setOtpError("Enter the full 6-digit code.");
-      return;
-    }
+  //   if (otp.trim().length !== 6) {
+  //     setOtpError("Enter the full 6-digit code.");
+  //     return;
+  //   }
 
-    setVerifying(true);
-    const result = await api.auth.verifyEmail(pendingEmail, otp.trim());
-    setVerifying(false);
+  //   setVerifying(true);
+  //   const result = await realAuthApi.verifyEmail(pendingEmail);
+  //   setVerifying(false);
 
-    if (!result.ok) {
-      setOtpError("Incorrect code. Please try again.");
-      return;
-    }
+  //   if (!result.ok) {
+  //     setOtpError("Incorrect code. Please try again.");
+  //     return;
+  //   }
 
-    const existingProfile = profileApi.get(pendingEmail);
-    const displayName =
-      role === "talent"
-        ? `${candidateData.firstName.trim()} ${candidateData.lastName.trim()}`
-        : employerData.companyName.trim();
+  //   const existingProfile = profileApi.get(pendingEmail);
+  //   const displayName =
+  //     role === "talent"
+  //       ? `${candidateData.firstName.trim()} ${candidateData.lastName.trim()}`
+  //       : employerData.companyName.trim();
 
-    session.set({
-      email: pendingEmail,
-      role,
-      displayName,
-      redirectPath: result.redirectPath || pendingRedirect,
-      avatarUrl: existingProfile?.personalInfo?.avatarUrl,
-    });
+  //   session.set({
+  //     id: 
+  //     email: pendingEmail,
+  //     role,
+  //     displayName,
+  //     redirectPath: result.redirectPath || pendingRedirect,
+  //     avatarUrl: existingProfile?.personalInfo?.avatarUrl,
+  //   });
 
-    router.push(result.redirectPath || pendingRedirect);
-  }
+  //   router.push(result.redirectPath || pendingRedirect);
+  // }
 
-  async function handleResend() {
-    setResending(true);
-    setResendMessage(null);
-    await api.auth.resendOtp(pendingEmail);
-    setResending(false);
-    setResendMessage("A new code has been sent.");
-  }
+  // async function handleResend() {
+  //   setResending(true);
+  //   setResendMessage(null);
+  //   await api.auth.resendOtp(pendingEmail);
+  //   setResending(false);
+  //   setResendMessage("A new code has been sent.");
+  // }
 
   // ── Step 2: verify email (shared by both roles) ──
   if (step === "verify") {
@@ -246,7 +247,7 @@ export default function SignUpFormSection() {
           <p className="mt-3 rounded-lg bg-[#EDE7F8] px-3 py-2 text-xs text-[#6b5a94]">
             Demo mode: use code <span className="font-mono font-semibold">123456</span>
           </p>
-
+{/* 
           <form onSubmit={handleVerify} className="mt-5 sm:mt-6">
             <input
               type="text"
@@ -275,8 +276,8 @@ export default function SignUpFormSection() {
                 "Verify email"
               )}
             </button>
-          </form>
-
+          </form> */}
+{/* 
           <div className="mt-4 text-xs text-gray-500 sm:mt-5 sm:text-sm">
             {resendMessage ? (
               <p className="text-[#3A2680]">{resendMessage}</p>
@@ -293,7 +294,7 @@ export default function SignUpFormSection() {
                 </button>
               </>
             )}
-          </div>
+          </div> */}
         </div>
       </div>
     );

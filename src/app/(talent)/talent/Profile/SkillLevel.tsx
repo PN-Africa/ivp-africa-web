@@ -17,6 +17,7 @@ export function SkillsAndDocuments({ value, onChange, onResumeFileSelected }: Sk
   const [certDraft, setCertDraft] = useState("");
   const [resumeFileName, setResumeFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const displayResumeUrl = value.resumeUrl;
 
   const updateSkill = (index: number, skillValue: string) => {
     const next = value.skills.map((s, i) => (i === index ? skillValue : s));
@@ -100,24 +101,30 @@ export function SkillsAndDocuments({ value, onChange, onResumeFileSelected }: Sk
       <div className="mt-4 sm:mt-5">
         <label className="mb-2 block text-xs font-medium text-gray-900 sm:text-sm">CV / Resume</label>
         <div className="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center sm:px-6 sm:py-8">
-          {resumeFileName ? (
-            <div className="flex items-center justify-center gap-2">
-              <FileText size={18} className="text-[#8A38F5]" />
-              <span className="text-xs font-medium text-gray-900 sm:text-sm">{resumeFileName}</span>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-gray-500 sm:text-sm">No file uploaded yet</p>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#EDE7F8] px-4 py-2 text-xs font-semibold text-[#8A38F5] transition-colors hover:bg-[#DCCFF5] sm:px-5 sm:text-sm"
-              >
-                <Upload size={14} />
-                Upload CV (PDF)
-              </button>
-            </>
-          )}
+          {resumeFileName || value.resumeUrl ? (
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex w-full items-center justify-center gap-2"
+        >
+          <FileText size={18} className="text-[#8A38F5]" />
+          <span className="text-xs font-medium text-gray-900 sm:text-sm">
+            {resumeFileName ?? value.resumeFileName ?? "upload cv"}
+          </span>
+        </button>
+      ) : (
+        <>
+          <p className="text-xs text-gray-500 sm:text-sm">No file uploaded yet</p>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-[#EDE7F8] px-4 py-2 text-xs font-semibold text-[#8A38F5] transition-colors hover:bg-[#DCCFF5] sm:px-5 sm:text-sm"
+          >
+            <Upload size={14} />
+            Upload CV (PDF)
+          </button>
+        </>
+      )}
           <input ref={fileInputRef} type="file" accept=".pdf" onChange={handleResumeSelect} className="hidden" />
         </div>
       </div>

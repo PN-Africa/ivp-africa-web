@@ -10,23 +10,41 @@ export interface RealJob {
   id: string;
   title: string;
   company: string;
+  companyLogoUrl?: string;
   location: string;
-  jobType: string;
+  employmentType: string;
   experienceLevel: string;
-  salary: string;
+  minSalary: number | null;
+  maxSalary: number | null;
   description: string;
+  requiredSkills: string[];
+  qualification: string;
+  department: string;
+  industry: string;
+  deadline: string;
+  createdAt: string;
+  status: string;
+  
 }
-
 function normalizeJob(raw: any): RealJob {
   return {
-    id: raw.id ?? raw._id ?? "",
-    title: raw.title ?? raw.jobTitle ?? "Untitled role",
-    company: raw.company ?? raw.companyName ?? "Unknown company",
+    id: raw.id ?? "",
+    title: raw.title ?? "Untitled role",
+    company: raw.employer?.companyName ?? "Unknown company",
+    companyLogoUrl: raw.employer?.logoUrl ?? undefined,
     location: raw.location ?? "Not specified",
-    jobType: raw.jobType ?? raw.type ?? "Not specified",
-    experienceLevel: raw.experienceLevel ?? raw.level ?? "Not specified",
-    salary: raw.salary ?? raw.salaryRange ?? "Not specified",
+    employmentType: raw.employmentType ?? "Not specified",
+    experienceLevel: raw.experienceLevel ?? "Not specified",
+    minSalary: raw.minSalary !== undefined && raw.minSalary !== null ? Number(raw.minSalary) : null,
+    maxSalary: raw.maxSalary !== undefined && raw.maxSalary !== null ? Number(raw.maxSalary) : null,
     description: raw.description ?? "",
+    requiredSkills: Array.isArray(raw.requiredSkills) ? raw.requiredSkills : [],
+    qualification: raw.qualification ?? "",
+    department: raw.department ?? "",
+    industry: raw.industry ?? "",
+    deadline: raw.deadline ?? "Not specified",
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+    status: raw.status ?? "PUBLISHED",
   };
 }
 
@@ -47,7 +65,7 @@ export const jobsApi = {
     const query = params.toString() ? `?${params.toString()}` : "";
 
     const result = await apiFetch<{ message: string; data: any[] }>(`/api/v1/jobs/search${query}`);
-
+    console.log("Jobs API response:", result);
     if (!result.ok) {
       return { ok: false as const, message: result.message };
     }

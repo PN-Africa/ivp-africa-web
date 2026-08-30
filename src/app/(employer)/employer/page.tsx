@@ -155,7 +155,7 @@ export default function EmployerDashboardPage() {
                         {candidate.name || "Anonymous Applicant"}
                       </p>
                       <p className="truncate text-[10px] text-gray-500 sm:text-xs">
-                        {candidate.jobTitle || "Applied Role"}
+                        {candidate.id || "Applied Role"}
                       </p>
                     </div>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize whitespace-nowrap sm:px-3 sm:py-1 sm:text-xs ${statusStyles[stageKey]}`}>

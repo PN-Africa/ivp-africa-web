@@ -13,6 +13,7 @@ export interface SkillsAndDocumentsInfo {
   certifications: string[]; // new
   portfolioLink: string;
   resumeUrl: string;
+   resumeFileName?: string;
 }
 
 export const emptySkillsAndDocuments: SkillsAndDocumentsInfo = {

@@ -1,6 +1,10 @@
 import { apiFetch } from "@/lib/api/httpClient";
 import { session } from "@/lib/auth/session";
 
+export type ApiResponse<T> = 
+  | { ok: true; data: T; message?: string }
+  | { ok: false; message: string };
+
 // ============================================================================
 // REAL API INTERFACES
 // ============================================================================
@@ -52,6 +56,28 @@ export interface RealPaymentRecord {
   };
 }
 
+// NEW: Interface for the usage response
+export interface SubscriptionUsageResponse {
+  hasActivePlan: boolean;
+  message?: string;
+  planName?: string;
+  billingCycle?: {
+    start: string;
+    end: string;
+  };
+  limits?: {
+    jobs: {
+      used: number;
+      total: number;
+      isUnlimited: boolean;
+    };
+    applications: {
+      total: number;
+      isUnlimited: boolean;
+    };
+  };
+}
+
 function authHeaders(): HeadersInit {
   const current = session.get();
   return current?.accessToken ? { Authorization: `Bearer ${current.accessToken}` } : {};
@@ -80,7 +106,7 @@ export const subscriptionApi = {
     return res;
   },
 
-  // 3. Initialize Paystack Checkout (Replaces the old instant-purchase)
+  // 3. Initialize Paystack Checkout
   initializePayment: async (planId: string) => {
     const res = await apiFetch<PaymentInitResponse>("/api/v1/payments/initialize", {
       method: "POST",
@@ -93,6 +119,15 @@ export const subscriptionApi = {
   // 4. Get Payment History for the Invoice Table
   getPaymentHistory: async () => {
     const res = await apiFetch<RealPaymentRecord[]>("/api/v1/payments/history", {
+      method: "GET",
+      headers: authHeaders(),
+    });
+    return res;
+  },
+
+  // 5. NEW: Get Subscription Usage Details
+  getUsage: async () => {
+    const res = await apiFetch<SubscriptionUsageResponse>("/api/v1/subscriptions/my-usage", {
       method: "GET",
       headers: authHeaders(),
     });

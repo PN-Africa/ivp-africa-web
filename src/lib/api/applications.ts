@@ -38,6 +38,7 @@ export const applicationsApi_Real={
 
     // Response shape (bare array vs. { data: [...] }) is unconfirmed — handle both.
     const rawList = Array.isArray(res.data) ? res.data : res.data.data ?? [];
+    console.log("Raw application from backend:", rawList[0]);
     return { ok: true as const, applications: rawList.map(normalizeApplication) };
   }
 }
