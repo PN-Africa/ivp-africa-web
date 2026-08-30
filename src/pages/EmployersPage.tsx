@@ -89,20 +89,12 @@ const Employers: React.FC = () => {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button 
-              href="/post-job"
+              href="/login"
               variant="primary"
               size="md"
               className="bg-primary text-black w-full sm:w-auto px-8 py-4 rounded-full font-bold shadow-lg transition-all duration-300"
             >
               Post a Job Now
-            </Button>
-            <Button 
-              href="#pricing"
-              variant="outline"
-              size="md"
-              className="bg-white text-black border-2 border-gray-200 w-full sm:w-auto px-8 py-4 rounded-full font-bold transition-all duration-300"
-            >
-              View Pricing
             </Button>
           </div>
         </div>
@@ -208,7 +200,7 @@ const Employers: React.FC = () => {
               Create your employer account today and post your first job in less than 5 minutes.
             </p>
             <Button 
-              href="/signup-employer"
+              href="/signUp"
               variant="primary"
               size="md"
               className="bg-primary text-white px-10 py-4 rounded-full font-bold shadow-lg transition-all duration-300 inline-flex"

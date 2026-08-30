@@ -53,14 +53,21 @@ export default function CandidatesPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
 
-  function refresh() {
-    if (!session?.email) return;
-    setCandidates(employerCandidatesApi.getAll(session.email));
+  async function refresh() {
+    if (!session?.accessToken) return; 
+    
+    try {
+      const data = await employerCandidatesApi.getAll(session.accessToken);
+      setCandidates(data);
+    } catch (error) {
+      console.error("Failed to load candidates", error);
+    }
   }
 
   useEffect(() => {
     refresh();
-  }, [session?.email]);
+  }, [session?.accessToken]); // Update dependency array to token
+
 
   const filteredCandidates = useMemo(() => {
     return candidates.filter((c) => {
@@ -92,18 +99,28 @@ export default function CandidatesPage() {
     setPage(1);
   }
 
-  function handleSetStage(candidateId: string, stage: PipelineStage) {
-    if (!session?.email) return;
-    employerCandidatesApi.setStage(session.email, candidateId, stage);
-    setOpenMenuId(null);
-    refresh();
+  async function handleSetStage(jobId: string, candidateId: string, stage: PipelineStage) {
+    if (!session?.accessToken) return;
+    try {
+      await employerCandidatesApi.setStage(jobId, candidateId, stage, session.accessToken);
+      setOpenMenuId(null);
+      refresh();
+    } catch (error) {
+      console.error(error);
+    }
   }
 
-  function handleRemove(candidateId: string) {
-    if (!session?.email) return;
-    employerCandidatesApi.remove(session.email, candidateId);
-    setOpenMenuId(null);
-    refresh();
+  // FIX: Make this async, pass token instead of email
+  async function handleRemove(candidateId: string) {
+    if (!session?.accessToken) return;
+    
+    try {
+      await employerCandidatesApi.remove(candidateId, session.accessToken);
+      setOpenMenuId(null);
+      refresh();
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   return (
@@ -211,7 +228,7 @@ export default function CandidatesPage() {
                                 <button
                                   key={stage}
                                   type="button"
-                                  onClick={() => handleSetStage(candidate.id, stage)}
+                                  onClick={() => handleSetStage(candidate.jobId, candidate.id, stage)}
                                   className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
                                 >
                                   {stage}

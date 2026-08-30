@@ -20,7 +20,7 @@ import {
    
 } from 'react-icons/fa';
 import Button from '../components/common/Button';
-import { SERVICES, CONTACT_INFO } from '../utils/constants';
+import { SERVICES } from '../utils/constants';
 import type { Service } from '../types';
 
 // Expanded icon map to catch more potential service string names
@@ -117,15 +117,6 @@ const ServicesPage: React.FC = () => {
               From AI-powered solutions to stunning web applications and creative designs,
               we provide comprehensive services to transform your ideas into reality.
             </p>
-            <Button
-              href={CONTACT_INFO?.serviceFormUrl || '#'}
-              external
-              variant="primary"
-              size="lg"
-              className="bg-transparent text-black border-none shadow hover:bg-white hover:text-black transition-colors duration-300 px-8 py-4 font-bold"
-            >
-              Request a Service
-            </Button>
           </motion.div>
         </div>
       </section>
@@ -227,29 +218,29 @@ const ServicesPage: React.FC = () => {
               viewport={{ once: true }}
             >
               <h2 className="text-4xl md:text-5xl font-extrabold mb-6 leading-tight">
-                Ready to Start Your Project?
+                Ready to Start Your Application?
               </h2>
               <p className="text-black/50 text-xl mb-10 leading-relaxed">
-                Let's discuss your requirements and create something amazing together.
-                I offer competitive pricing and flexible packages tailored to your needs.
+                Want to discuss?, or create something amazing together.
+                We are available whenever you need us.
               </p>
               <div className="flex flex-wrap gap-4">
                 <Button
-                  href={CONTACT_INFO?.serviceFormUrl || '#'}
+                  href= '/contact'
                   external
                   variant="secondary"
                   size="lg"
                   className="bg-black text-black border-2 border-black  transition-colors duration-300 px-8 font-bold"
                 >
-                  Request a Quote
+                  Contact Us
                 </Button>
                 <Button 
-                  href="/contact" 
+                  href="/signUp" 
                   variant="outline" 
                   size="lg" 
                   className="bg-transparent border-2 border-black text-black transition-colors duration-300 px-8 font-bold"
                 >
-                  Contact Me
+                  Get Started
                 </Button>
               </div>
             </motion.div>
@@ -262,19 +253,19 @@ const ServicesPage: React.FC = () => {
               className="grid grid-cols-2 gap-6"
             >
               <div className="bg-black rounded-2xl p-8 text-center shadow-2xl hover:-translate-y-2 transition-transform duration-300 border border-white/10">
-                <p className="text-5xl font-black text-white mb-3 tracking-tighter">19+</p>
+                <p className="text-5xl font-black text-white mb-3 tracking-tighter">50000+</p>
                 <p className="text-[#8c52ff] font-bold uppercase tracking-wider text-sm">Testimonials</p>
               </div>
               <div className="bg-black rounded-2xl p-8 text-center shadow-2xl hover:-translate-y-2 transition-transform duration-300 border border-white/10">
-                <p className="text-5xl font-black text-white mb-3 tracking-tighter">17+</p>
+                <p className="text-5xl font-black text-white mb-3 tracking-tighter">17000+</p>
                 <p className="text-[#8c52ff] font-bold uppercase tracking-wider text-sm">Clients</p>
               </div>
               <div className="bg-black rounded-2xl p-8 text-center shadow-2xl hover:-translate-y-2 transition-transform duration-300 border border-white/10">
-                <p className="text-5xl font-black text-white mb-3 tracking-tighter">3+</p>
+                <p className="text-5xl font-black text-white mb-3 tracking-tighter">5+</p>
                 <p className="text-[#8c52ff] font-bold uppercase tracking-wider text-sm">Years</p>
               </div>
               <div className="bg-black rounded-2xl p-8 text-center shadow-2xl hover:-translate-y-2 transition-transform duration-300 border border-white/10">
-                <p className="text-5xl font-black text-white mb-3 tracking-tighter">100%</p>
+                <p className="text-5xl font-black text-white mb-3 tracking-tighter">98%</p>
                 <p className="text-[#8c52ff] font-bold uppercase tracking-wider text-sm">Satisfaction</p>
               </div>
             </motion.div>

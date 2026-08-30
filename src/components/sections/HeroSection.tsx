@@ -68,16 +68,16 @@ const HeroSection: React.FC = () => {
               className="flex flex-wrap gap-4 mb-10"
             >
               <Button
-                href={CONTACT_INFO.serviceFormUrl}
+                href="/signUp"
                 external
-                variant="secondary"
+                variant="outline"
                 size="md"
-                className="bg-black text-white hover:bg-transparent hover:text-black border-2 border-black transition-all duration-300"
+                className="text-black bg-transparent hover:text-black border-2 border-black transition-all duration-300"
               >
                 I'm looking for a job
               </Button>
               <Button 
-                href="/portfolio" 
+                href="/signUp" 
                 variant="outline" 
                 size="md" 
                 className="bg-black text-black hover:bg-transparent hover:text-black border-2 border-black transition-all duration-300"

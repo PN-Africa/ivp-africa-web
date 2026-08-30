@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, MoreVertical } from "lucide-react";
 import { employerJobsApi, EmployerJob, EmployerJobStatus } from "@/lib/api/employerJob";
+import { applicationsApi } from "@/lib/api/applications";
+import { useSession } from "@/lib/auth/useSession";
+import type { ApplicationRecord } from "@/lib/types/application";
 
 type TabValue = "all" | EmployerJobStatus;
 
@@ -44,23 +47,32 @@ function formatDate(iso: string) {
 }
 
 export default function EmployerJobsPage() {
+  const { session } = useSession();
   const [jobs, setJobs] = useState<EmployerJob[]>([]);
+  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabValue>("all");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
-    const res = await employerJobsApi.getAll();
-    if (res.ok && res.data) {
-      setJobs(res.data);
+    const [jobsRes, appsRes] = await Promise.all([
+      employerJobsApi.getAll(),
+      session?.email ? applicationsApi.getAll(session.email) : Promise.resolve([]),
+    ]);
+
+    if (jobsRes.ok && jobsRes.data) {
+      setJobs(jobsRes.data);
     }
+
+    const apps = Array.isArray(appsRes) ? appsRes : (appsRes as any)?.data ?? [];
+    setApplications(apps);
     setLoading(false);
   }
 
   useEffect(() => {
     refresh();
-  }, []);
+  }, [session?.email]);
 
   const counts = useMemo(() => {
     return {
@@ -88,13 +100,13 @@ export default function EmployerJobsPage() {
     refresh();
   }
 
- return (
+  return (
     <>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
           Job Postings
         </h1>
-        
+
         <Link
           href="/employer/jobs/new"
           className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#8A38F5] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-[#7226e0] sm:self-start sm:px-4 sm:py-2.5 sm:text-sm"
@@ -129,24 +141,31 @@ export default function EmployerJobsPage() {
           ))}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="min-h-[300px] overflow-x-auto pb-20">
           {loading ? (
             <div className="p-8 text-center text-sm text-gray-400">Loading job postings...</div>
           ) : (
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase sm:px-5 sm:text-xs">Role</th>
-                  <th className="hidden px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase md:table-cell sm:text-xs">Department</th>
-                  <th className="px-4 py-3 text-center text-[10px] font-semibold text-gray-400 uppercase sm:text-xs">Applicants</th>
-                  <th className="px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase sm:text-xs">Status</th>
-                  <th className="hidden px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase lg:table-cell sm:text-xs">Posted on</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-semibold text-gray-400 uppercase sm:px-5 sm:text-xs">Actions</th>
+                  <th className="px-4 py-3 text-[10px] font-semibold uppercase text-gray-400 sm:px-5 sm:text-xs">Role</th>
+                  <th className="hidden px-4 py-3 text-[10px] font-semibold uppercase text-gray-400 md:table-cell sm:text-xs">Department</th>
+                  <th className="px-4 py-3 text-center text-[10px] font-semibold uppercase text-gray-400 sm:text-xs">Applicants</th>
+                  <th className="px-4 py-3 text-[10px] font-semibold uppercase text-gray-400 sm:text-xs">Status</th>
+                  <th className="hidden px-4 py-3 text-[10px] font-semibold uppercase text-gray-400 lg:table-cell sm:text-xs">Posted on</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold uppercase text-gray-400 sm:px-5 sm:text-xs">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredJobs.map((job, i) => {
                   const palette = avatarPalette[i % avatarPalette.length];
+                  
+                  // Compute dynamic applicant count
+                  const dynamicCount = applications.filter((a) => {
+                    if ((a as any).jobId && (a as any).jobId === job.id) return true;
+                    return a.jobTitle?.trim().toLowerCase() === job.title?.trim().toLowerCase();
+                  }).length;
+
                   return (
                     <tr key={job.id} className="transition-colors hover:bg-gray-50">
                       <td className="px-4 py-4 sm:px-5">
@@ -163,24 +182,37 @@ export default function EmployerJobsPage() {
                         </div>
                       </td>
                       <td className="hidden px-4 py-4 text-sm text-gray-600 md:table-cell">{job.department}</td>
-                      <td className="px-4 py-4 text-center text-sm font-semibold text-gray-900">{job.applicants}</td>
+                      <td className="px-4 py-4 text-center text-sm font-semibold text-gray-900">
+                        {dynamicCount || job.applicants || 0}
+                      </td>
                       <td className="px-4 py-4">
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap ${statusStyles[job.status]}`}>
+                        <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyles[job.status]}`}>
                           {statusLabels[job.status]}
                         </span>
                       </td>
                       <td className="hidden px-4 py-4 text-sm text-gray-400 lg:table-cell">{formatDate(job.postedOn)}</td>
-                      <td className="relative px-4 py-4 text-right sm:px-5">
+
+                      <td className={`relative px-4 py-4 text-right sm:px-5 ${openMenuId === job.id ? "z-50" : ""}`}>
                         <button
                           type="button"
-                          onClick={() => setOpenMenuId(openMenuId === job.id ? null : job.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(openMenuId === job.id ? null : job.id);
+                          }}
                           className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                         >
                           <MoreVertical size={16} />
                         </button>
+
                         {openMenuId === job.id && (
                           <>
-                            <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                            <div 
+                              className="fixed inset-0 z-10" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(null);
+                              }} 
+                            />
                             <div className="absolute right-4 z-20 mt-1 w-40 rounded-xl border border-gray-100 bg-white py-1 text-left shadow-lg sm:right-5">
                               <Link
                                 href={`/employer/jobs/new?id=${job.id}`}

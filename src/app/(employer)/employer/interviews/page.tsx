@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Calendar, Video, MessageCircle } from "lucide-react";
+import { Plus, Calendar, Video, MessageCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
-import { employerCandidatesApi,EmployerCandidate  } from "@/lib/api/candidate";
-import { interviewsApi,Interview, InterviewStatus, InterviewType } from "@/lib/api/interview";
-
+import { employerCandidatesApi, EmployerCandidate } from "@/lib/api/candidate";
+import { interviewsApi, Interview, InterviewStatus, InterviewType } from "@/lib/api/interview";
 
 type TabValue = InterviewStatus;
 const tabs: { value: TabValue; label: string }[] = [
@@ -23,6 +22,7 @@ const avatarPalette = [
 ];
 
 function formatDateTime(iso: string) {
+  if (!iso) return "TBD";
   const d = new Date(iso);
   const date = d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -31,30 +31,77 @@ function formatDateTime(iso: string) {
 
 export default function InterviewsPage() {
   const { session } = useSession();
+  
+  // Data States
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // UI States
   const [activeTab, setActiveTab] = useState<TabValue>("upcoming");
   const [showSchedule, setShowSchedule] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
 
+  // Form State
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [interviewType, setInterviewType] = useState<InterviewType>("Video Call");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [instructions, setInstructions] = useState("");
+  
+  // Submission State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
 
-  function refresh() {
-    if (!session?.email) return;
-    setInterviews(interviewsApi.getAll(session.email));
-    setCandidates(employerCandidatesApi.getAll(session.email));
+  // Async data fetcher
+  // Async data fetcher
+  async function refresh() {
+    // If there's no token, stop loading and exit
+    if (!session?.token) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // 1. Fetch Real Interviews
+      const realInterviews = await interviewsApi.getAll(session.token);
+      setInterviews(realInterviews);
+
+      // 2. Fetch Real Candidates for the dropdown
+      const queryParams = new URLSearchParams({ status: "SHORTLISTED" });
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
+      
+      const applicantsRes = await fetch(`${baseUrl}/applicants?${queryParams.toString()}`, {
+        headers: { Authorization: `Bearer ${session.token}` }
+      });
+      
+      if (applicantsRes.ok) {
+        const rawApplicants = await applicantsRes.json();
+        const mappedCandidates = rawApplicants.map((a: any) => ({
+           id: a.id,
+           jobId: a.jobId,
+           name: (a.talentProfile?.firstName || "") + " " + (a.talentProfile?.lastName || ""),
+           role: a.job?.title || "Applicant",
+           status: a.status
+        }));
+        setCandidates(mappedCandidates);
+      }
+    } catch (err) {
+      console.error("Failed to load interviews or candidates:", err);
+    } finally {
+      // Always stop loading, even if the API throws an error
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => {
     refresh();
-  }, [session?.email]);
+  }, [session?.token]);
 
   const counts = useMemo(() => {
     return {
@@ -70,32 +117,63 @@ export default function InterviewsPage() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [interviews, activeTab]);
 
-  function handleScheduleSubmit() {
-    if (!session?.email || !selectedCandidateId || !scheduleDate || !scheduleTime) return;
+  async function handleScheduleSubmit() {
+    if (!session?.token || !selectedCandidateId || !scheduleDate || !scheduleTime) return;
+    
     const candidate = candidates.find((c) => c.id === selectedCandidateId);
     if (!candidate) return;
 
-    interviewsApi.schedule(session.email, {
-      candidateName: candidate.name,
-      role: candidate.role,
-      date: new Date(`${scheduleDate}T${scheduleTime}`).toISOString(),
-      type: interviewType,
-      phoneNumber: interviewType === "Phone Interview" ? phoneNumber : undefined,
-    });
+    setIsSubmitting(true);
+    setError(null);
 
-    setShowSchedule(false);
-    setSelectedCandidateId("");
-    setScheduleDate("");
-    setScheduleTime("");
-    setInterviewType("Video Call");
-    setPhoneNumber("");
-    refresh();
+    try {
+      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      
+      let locationStr = "";
+      if (interviewType === "Video Call") {
+        locationStr = `Virtual Meeting: https://meet.ivpafrica.com/${crypto.randomUUID().slice(0, 8)}`;
+      } else if (interviewType === "Phone Interview") {
+        locationStr = `Phone Call: ${phoneNumber}`;
+      } else {
+        locationStr = "In-Person Office Location";
+      }
+
+      await interviewsApi.scheduleApplicationInterview(
+        session.token,
+        candidate.jobId, 
+        candidate.id,  
+        {
+          scheduledAt,
+          location: locationStr,
+          instructions: instructions || undefined,
+        }
+      );
+
+      // Reset form and re-fetch from backend
+      setShowSchedule(false);
+      setSelectedCandidateId("");
+      setScheduleDate("");
+      setScheduleTime("");
+      setInterviewType("Video Call");
+      setPhoneNumber("");
+      setInstructions("");
+      await refresh(); 
+      
+    } catch (err: any) {
+      setError(err.message || "Something went wrong while scheduling.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleCancel(interviewId: string) {
-    if (!session?.email) return;
-    interviewsApi.setStatus(session.email, interviewId, "cancelled");
-    refresh();
+  async function handleCancel(interviewId: string) {
+    if (!session?.token) return;
+    try {
+      await interviewsApi.setStatus(session.token, interviewId, "cancelled");
+      await refresh(); // Reload list after cancel
+    } catch (err) {
+      alert("Failed to cancel interview");
+    }
   }
 
   function openReschedule(interview: Interview) {
@@ -105,11 +183,29 @@ export default function InterviewsPage() {
     setRescheduleId(interview.id);
   }
 
-  function handleRescheduleSubmit() {
-    if (!session?.email || !rescheduleId || !newDate || !newTime) return;
-    interviewsApi.reschedule(session.email, rescheduleId, new Date(`${newDate}T${newTime}`).toISOString());
-    setRescheduleId(null);
-    refresh();
+  async function handleRescheduleSubmit() {
+    if (!session?.token || !rescheduleId || !newDate || !newTime) return;
+    try {
+      await interviewsApi.reschedule(
+        session.token, 
+        rescheduleId, 
+        new Date(`${newDate}T${newTime}`).toISOString()
+      );
+      setRescheduleId(null);
+      await refresh(); // Reload list after reschedule
+    } catch (err) {
+      alert("Failed to reschedule");
+    }
+  }
+
+  // --- UI RENDERING ---
+
+  if (isLoading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-[#8A38F5]" />
+      </div>
+    );
   }
 
   return (
@@ -132,7 +228,7 @@ export default function InterviewsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto border-b border-gray-100 sm:gap-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-gray-100 sm:gap-2 mt-6">
         {tabs.map((tab) => (
           <button
             key={tab.value}
@@ -157,7 +253,7 @@ export default function InterviewsPage() {
       </div>
 
       {/* Interview cards */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 mt-4">
         {filteredInterviews.map((interview, i) => {
           const palette = avatarPalette[i % avatarPalette.length];
           return (
@@ -187,7 +283,6 @@ export default function InterviewsPage() {
               {activeTab === "upcoming" && (
                 <div className="flex shrink-0 gap-2">
                   {interview.type === "Video Call" ? (
-                    
                       <a href={interview.meetingLink ?? "#"}
                       target={interview.meetingLink ? "_blank" : undefined}
                       rel="noreferrer"
@@ -201,7 +296,6 @@ export default function InterviewsPage() {
                       Join Meeting
                     </a>
                   ) : interview.type === "Phone Interview" ? (
-                    
                      <a href={
                         interview.phoneNumber
                           ? `https://wa.me/${interview.phoneNumber.replace(/[^\d]/g, "")}`
@@ -237,7 +331,7 @@ export default function InterviewsPage() {
 
         {filteredInterviews.length === 0 && (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
-            No {activeTab} interviews.
+            No {activeTab} interviews found.
           </div>
         )}
       </div>
@@ -247,6 +341,13 @@ export default function InterviewsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-base font-bold text-gray-900">Schedule Interview</h3>
+
+            {error && (
+              <div className="mt-4 flex items-center gap-2 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-600">
+                <AlertCircle size={14} />
+                {error}
+              </div>
+            )}
 
             <div className="mt-4 flex flex-col gap-3">
               <div>
@@ -259,10 +360,13 @@ export default function InterviewsPage() {
                   <option value="">Select a candidate</option>
                   {candidates.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} — {c.role}
+                      {c.name} — {c.role} {c.status ? `(${c.status})` : ""}
                     </option>
                   ))}
                 </select>
+                {candidates.length === 0 && (
+                   <p className="text-[10px] text-gray-500 mt-1">No shortlisted candidates found. Please shortlist someone first.</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -313,12 +417,28 @@ export default function InterviewsPage() {
                   />
                 </div>
               )}
+
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-gray-900">
+                  Instructions (Optional)
+                </label>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="E.g., Please prepare a 5-minute presentation..."
+                  rows={2}
+                  className="w-full resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-[#8A38F5]"
+                />
+              </div>
             </div>
 
             <div className="mt-5 flex gap-3">
               <button
                 type="button"
-                onClick={() => setShowSchedule(false)}
+                onClick={() => {
+                  setShowSchedule(false);
+                  setError(null);
+                }}
                 className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50"
               >
                 Cancel
@@ -327,6 +447,7 @@ export default function InterviewsPage() {
                 type="button"
                 onClick={handleScheduleSubmit}
                 disabled={
+                  isSubmitting ||
                   !selectedCandidateId ||
                   !scheduleDate ||
                   !scheduleTime ||
@@ -334,7 +455,7 @@ export default function InterviewsPage() {
                 }
                 className="flex-1 rounded-xl bg-[#8A38F5] py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#7226e0] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Schedule
+                {isSubmitting ? "Scheduling..." : "Schedule"}
               </button>
             </div>
           </div>

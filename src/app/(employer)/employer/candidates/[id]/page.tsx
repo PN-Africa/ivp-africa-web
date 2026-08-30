@@ -39,33 +39,52 @@ export default function CandidateProfilePage() {
   const [activeTab, setActiveTab] = useState<TabValue>("Overview");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function refresh() {
-    if (!id || !session?.email) return;
-    const found = employerCandidatesApi.getById(session.email, id);
-    if (!found) {
-      setNotFound(true);
-      return;
+  async function refresh() {
+    if (!id || !session?.accessToken) return; 
+    
+    try {
+      const found = await employerCandidatesApi.getById(id as string, session.accessToken);
+      
+      if (!found) {
+        setNotFound(true);
+        return;
+      }
+      setCandidate(found);
+    } catch (error) {
+      console.error("Failed to load candidate", error);
     }
-    setCandidate(found);
   }
 
   useEffect(() => {
     refresh();
-  }, [id, session?.email]);
+  }, [id, session?.accessToken]);
 
-  function handleMoveToNextStage() {
-    if (!candidate || !session?.email) return;
+  async function handleMoveToNextStage() {
+    if (!candidate || !session?.accessToken) return;
+    
     const currentIndex = stageOptions.indexOf(candidate.stage);
     const nextStage = stageOptions[Math.min(currentIndex + 1, stageOptions.length - 1)];
-    employerCandidatesApi.setStage(session.email, candidate.id, nextStage);
-    refresh();
+    
+    try {
+      // Pass candidate.jobId first
+      await employerCandidatesApi.setStage(candidate.jobId, candidate.id, nextStage, session.accessToken);
+      refresh();
+    } catch (error) {
+      console.error(error);
+    }
   }
 
-  function handleSetStage(stage: PipelineStage) {
-    if (!candidate || !session?.email) return;
-    employerCandidatesApi.setStage(session.email, candidate.id, stage);
-    setMenuOpen(false);
-    refresh();
+  async function handleSetStage(stage: PipelineStage) {
+    if (!candidate || !session?.accessToken) return;
+    
+    try {
+      // Pass candidate.jobId first
+      await employerCandidatesApi.setStage(candidate.jobId, candidate.id, stage, session.accessToken);
+      setMenuOpen(false);
+      refresh();
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   if (notFound) {

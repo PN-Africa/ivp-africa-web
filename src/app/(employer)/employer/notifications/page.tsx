@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, CheckCircle2, MessageSquare, AlertTriangle, Trash2 } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
-import { employerNotificationsApi,EmployerNotification, EmployerNotificationType } from "@/lib/api/employerNotification";
+import { employerNotificationsApi, EmployerNotification, EmployerNotificationType } from "@/lib/api/employerNotification";
 
 type TabValue = "all" | "unread";
 
@@ -117,11 +117,11 @@ export default function EmployerNotificationsPage() {
         {filteredNotifications.map((notification) => {
           const { icon: Icon, bg, text } = typeIcons[notification.type];
           return (
-            <button
+            /* FIXED: Changed outer <button> to a <div> and added `cursor-pointer` to className */
+            <div
               key={notification.id}
-              type="button"
               onClick={() => handleClick(notification)}
-              className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left transition-colors sm:p-5 ${
+              className={`flex w-full cursor-pointer items-start gap-3 rounded-2xl border p-4 text-left transition-colors sm:p-5 ${
                 !notification.read
                   ? "border-[#EDE7F8] bg-[#F5F3FA] hover:bg-[#EDE7F8]"
                   : "border-gray-100 bg-white hover:bg-gray-50"
@@ -137,6 +137,8 @@ export default function EmployerNotificationsPage() {
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 {!notification.read && <span className="h-2 w-2 rounded-full bg-[#8A38F5]" />}
+                
+                {/* The inner button remains untouched. Its e.stopPropagation() prevents the outer div's onClick from firing. */}
                 <button
                   type="button"
                   onClick={(e) => handleRemove(notification.id, e)}
@@ -146,7 +148,7 @@ export default function EmployerNotificationsPage() {
                   <Trash2 size={15} />
                 </button>
               </div>
-            </button>
+            </div>
           );
         })}
 
