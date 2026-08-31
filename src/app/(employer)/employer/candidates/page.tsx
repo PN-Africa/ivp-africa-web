@@ -9,18 +9,17 @@ import { employerCandidatesApi, EmployerCandidate, PipelineStage } from "@/lib/a
 
 type TabValue = "All" | PipelineStage;
 
-const tabs: TabValue[] = ["All", "New", "Screening", "Interview", "Offered", "Hired"];
-
+const tabs: TabValue[] = ["All", "New", "Screening", "Interview", "Offered", "Hired", "Rejected"];
 const stageStyles: Record<PipelineStage, string> = {
   New: "bg-gray-100 text-gray-600",
   Screening: "bg-[#EDE7F8] text-[#8A38F5]",
   Interview: "bg-blue-50 text-blue-700",
   Offered: "bg-amber-50 text-amber-700",
   Hired: "bg-green-50 text-green-700",
+  Rejected: "bg-red-50 text-red-600",
 };
 
-const stageOptions: PipelineStage[] = ["New", "Screening", "Interview", "Offered", "Hired"];
-
+const stageOptions: PipelineStage[] = ["New", "Screening", "Interview", "Offered", "Hired", "Rejected"];
 const avatarPalette = [
   { bg: "bg-purple-100", text: "text-purple-600" },
   { bg: "bg-blue-100", text: "text-blue-600" },
