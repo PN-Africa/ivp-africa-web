@@ -39,6 +39,7 @@ function PostJobContent() {
       const res = await employerJobsApi.getById(editId!);
       if (!res.ok || !res.data) {
         setNotFound(true);
+        setLoaded(true);
         return;
       }
       const job = res.data;
@@ -49,8 +50,13 @@ function PostJobContent() {
       setMinSalary(job.minSalary ? String(job.minSalary) : "");
       setMaxSalary(job.maxSalary ? String(job.maxSalary) : "");
       setLocation(job.location);
-      setDeadline(job.deadline || "");
-      setEmploymentType(job.workMode);
+
+      if (job.deadline) {
+        const d = new Date(job.deadline);
+        setDeadline(!isNaN(d.getTime()) ? d.toISOString().split("T")[0] : job.deadline);
+      }
+
+      setEmploymentType(job.workMode || "Full-Time");
       setSkills(job.skills || []);
       setLoaded(true);
     }
@@ -161,7 +167,7 @@ function PostJobContent() {
 
       <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 md:p-8">
         {error && (
-          <div className="mb-6 flex items-center gap-2 rounded-xl bg-red-50 p-4 text-sm text-red-600 border border-red-200">
+          <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
             <AlertCircle size={18} className="shrink-0" />
             <span>{error}</span>
           </div>

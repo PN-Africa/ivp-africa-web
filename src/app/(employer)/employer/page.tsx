@@ -148,6 +148,11 @@ export default function EmployerDashboardPage() {
             <div className="flex flex-col divide-y divide-gray-100">
               {recentCandidates.map((candidate) => {
                 const stageKey = getCandidateStageKey(candidate);
+                
+                // ADDED: Find the corresponding job to display its title
+                const appliedJob = jobs.find((j: any) => (j.id || j._id) === candidate.jobId);
+                const jobTitle = appliedJob?.title || "Unknown Role";
+
                 return (
                   <div key={candidate.id} className="flex items-center justify-between gap-2 py-2.5 first:pt-0 last:pb-0 sm:gap-3 sm:py-3">
                     <div className="min-w-0">
@@ -155,7 +160,8 @@ export default function EmployerDashboardPage() {
                         {candidate.name || "Anonymous Applicant"}
                       </p>
                       <p className="truncate text-[10px] text-gray-500 sm:text-xs">
-                        {candidate.id || "Applied Role"}
+                        {/* CHANGED: Render jobTitle instead of candidate.id */}
+                        {jobTitle}
                       </p>
                     </div>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize whitespace-nowrap sm:px-3 sm:py-1 sm:text-xs ${statusStyles[stageKey]}`}>
@@ -241,26 +247,28 @@ export default function EmployerDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {jobs.slice(0, 5).map((job) => {
-                  const jobCandidates = candidates.filter((c) => c.jobId === job.id);
-                  const interviews = jobCandidates.filter((c) => getCandidateStageKey(c) === "interview").length;
-                  const hires = jobCandidates.filter((c) => getCandidateStageKey(c) === "hired").length;
+          {jobs.slice(0, 5).map((job: any) => {
+            const actualJobId = job.id || job._id;
+            
+            const jobCandidates = candidates.filter((c) => c.jobId === actualJobId);
+            const interviews = jobCandidates.filter((c) => getCandidateStageKey(c) === "interview").length;
+            const hires = jobCandidates.filter((c) => getCandidateStageKey(c) === "hired").length;
 
                   return (
-                    <tr key={job.id}>
-                      <td className="py-2.5 sm:py-3">
-                        <p className="text-xs font-semibold text-gray-900 sm:text-sm">{job.title}</p>
-                        <p className="text-[10px] text-gray-400 sm:text-xs">
-                          {job.location} · {job.workMode}
-                        </p>
-                      </td>
-                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{jobCandidates.length}</td>
-                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{interviews}</td>
-                      <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{hires}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+              <tr key={actualJobId}>
+                <td className="py-2.5 sm:py-3">
+                  <p className="text-xs font-semibold text-gray-900 sm:text-sm">{job.title}</p>
+                  <p className="text-[10px] text-gray-400 sm:text-xs">
+                    {job.location} · {job.workMode}
+                  </p>
+                </td>
+                <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{jobCandidates.length}</td>
+                <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{interviews}</td>
+                <td className="py-2.5 text-right text-xs text-gray-700 sm:py-3 sm:text-sm">{hires}</td>
+              </tr>
+            );
+          })}
+        </tbody>
             </table>
           </div>
         )}

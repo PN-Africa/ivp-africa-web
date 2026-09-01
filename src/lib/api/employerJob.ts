@@ -33,60 +33,78 @@ export interface CreateBackendJobPayload {
   status?: "PUBLISHED" | "DRAFT";
 }
 
-function mapBackendJobToEmployerJob(raw: any): EmployerJob {
-  console.log("Raw job from backend:", raw); // <-- ADD THIS
-  
+function mapBackendJobToEmployerJob(rawInput: any): EmployerJob {
+  // Handle envelope responses wrapped in { data: { ... } }
+  const raw =
+    rawInput?.data && typeof rawInput.data === "object" && !Array.isArray(rawInput.data)
+      ? rawInput.data
+      : rawInput || {};
+
   let mappedStatus: EmployerJobStatus = "active";
-  if (raw.status === "DRAFT") mappedStatus = "draft";
-  if (raw.status === "CLOSED") mappedStatus = "closed";
+  const statusUpper = String(raw.status || "").toUpperCase();
+  if (statusUpper === "DRAFT") mappedStatus = "draft";
+  else if (statusUpper === "CLOSED" || statusUpper === "ARCHIVED") mappedStatus = "closed";
+
+  // Check all common Prisma/NestJS variations for applicant counts
+  const applicantCount =
+    raw._count?.applications ??
+    raw._count?.JobApplication ??
+    raw._count?.jobApplications ??
+    raw._count?.Application ??
+    raw.applicationCount ??
+    raw.applicantCount ??
+    raw.applicationsCount ??
+    raw.totalApplicants ??
+    (Array.isArray(raw.applications) ? raw.applications.length : 0);
 
   return {
-    id: raw.id,
-    title: raw.title,
-    location: raw.location,
-    workMode: raw.employmentType || "Full-Time",
+    id: raw.id || raw._id || "",
+    title: raw.title || "",
+    location: raw.location || "",
+    workMode: raw.employmentType || raw.workMode || "Full-Time",
     department: raw.department || "General",
     description: raw.description || "",
     qualification: raw.qualification || "",
     minSalary: raw.minSalary ?? "",
     maxSalary: raw.maxSalary ?? "",
     deadline: raw.deadline ? new Date(raw.deadline).toISOString().split("T")[0] : "",
-    skills: raw.requiredSkills || [],
-    
-    // TEMPORARY FIX: Check common variations of how this might be returned
-    applicants: raw._count?.applications 
-      ?? raw.applicationCount 
-      ?? raw.applications?.length 
-      ?? 0,
-      
+    skills: raw.requiredSkills || raw.skills || [],
+    applicants: Number(applicantCount) || 0,
     status: mappedStatus,
-    postedOn: raw.createdAt ? new Date(raw.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+    postedOn: raw.createdAt
+      ? new Date(raw.createdAt).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0],
   };
 }
 
 export const employerJobsApi = {
   async getAll(): Promise<{ ok: boolean; data?: EmployerJob[]; message?: string }> {
-    const res = await apiFetch<any[]>("/api/v1/jobs/my-postings", { method: "GET" });
+    const res = await apiFetch<any>("/api/v1/jobs/my-postings", { method: "GET" });
     if (!res.ok) {
-    return { ok: false, message: res.message || "Failed to fetch jobs" };
-    console.log("my-jobs",res);
-  }
-  if (!res.data) {
-    return { ok: false, message: "Failed to fetch jobs" };
-  }
-  return { ok: true, data: res.data.map(mapBackendJobToEmployerJob) };
-   
+      return { ok: false, message: res.message || "Failed to fetch jobs" };
+    }
+
+    const list = Array.isArray(res.data)
+      ? res.data
+      : Array.isArray(res.data?.data)
+      ? res.data.data
+      : [];
+
+    return { ok: true, data: list.map(mapBackendJobToEmployerJob) };
   },
 
   async getById(id: string): Promise<{ ok: boolean; data?: EmployerJob; message?: string }> {
     const res = await apiFetch<any>(`/api/v1/jobs/${id}`, { method: "GET" });
-    if (!res.ok ) {
+    if (!res.ok) {
       return { ok: false, message: res.message || "Job not found" };
     }
-    if(!res.data){
+
+    const payload = res.data?.data ?? res.data;
+    if (!payload || (!payload.id && !payload._id && !payload.title)) {
       return { ok: false, message: "Job not found" };
     }
-    return { ok: true, data: mapBackendJobToEmployerJob(res.data) };
+
+    return { ok: true, data: mapBackendJobToEmployerJob(payload) };
   },
 
   async create(payload: CreateBackendJobPayload): Promise<{ ok: boolean; data?: EmployerJob; message?: string }> {
@@ -95,42 +113,41 @@ export const employerJobsApi = {
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok ) {
+    if (!res.ok) {
       return { ok: false, message: res.message || "Failed to create job posting" };
     }
-    if (!res.data) {
-      return { ok: false, message: "Failed to create job posting" };
-    }
-    return { ok: true, data: mapBackendJobToEmployerJob(res.data) };
+    const payloadData = res.data?.data ?? res.data;
+    return { ok: true, data: mapBackendJobToEmployerJob(payloadData) };
   },
 
   async update(id: string, payload: Partial<CreateBackendJobPayload>): Promise<{ ok: boolean; message?: string }> {
-  const res = await apiFetch<any>(`/api/v1/jobs/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    return { ok: false, message: res.message };
-  }
-  return { ok: true };
-},
+    const res = await apiFetch<any>(`/api/v1/jobs/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      return { ok: false, message: res.message };
+    }
+    return { ok: true };
+  },
 
-async setStatus(id: string, status: EmployerJobStatus): Promise<{ ok: boolean; message?: string }> {
-  const backendStatus = status === "active" ? "PUBLISHED" : status === "draft" ? "DRAFT" : "CLOSED";
-  const res = await apiFetch<any>(`/api/v1/jobs/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify({ status: backendStatus }),
-  });
-  if (!res.ok) {
-    return { ok: false, message: res.message };
-  }
-  return { ok: true };
-},
+  async setStatus(id: string, status: EmployerJobStatus): Promise<{ ok: boolean; message?: string }> {
+    const backendStatus = status === "active" ? "PUBLISHED" : status === "draft" ? "DRAFT" : "CLOSED";
+    const res = await apiFetch<any>(`/api/v1/jobs/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: backendStatus }),
+    });
+    if (!res.ok) {
+      return { ok: false, message: res.message };
+    }
+    return { ok: true };
+  },
+
   async remove(id: string): Promise<{ ok: boolean; message?: string }> {
     const res = await apiFetch<any>(`/api/v1/jobs/${id}`, { method: "DELETE" });
     if (!res.ok) {
-    return { ok: false, message: res.message };
-  }
-   return { ok: true };
+      return { ok: false, message: res.message };
+    }
+    return { ok: true };
   },
 };

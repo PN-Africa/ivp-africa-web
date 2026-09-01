@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, MoreVertical } from "lucide-react";
-import { employerJobsApi, EmployerJob, EmployerJobStatus } from "@/lib/api/employerJob";
-import { applicationsApi } from "@/lib/api/applications";
+import { employerJobsApi, EmployerJobStatus } from "@/lib/api/employerJob";
+import { employerCandidatesApi, type EmployerCandidate } from "@/lib/api/candidate";
 import { useSession } from "@/lib/auth/useSession";
-import type { ApplicationRecord } from "@/lib/types/application";
+import type { EmployerJob } from "@/lib/api/employerJob";
 
 type TabValue = "all" | EmployerJobStatus;
 
@@ -49,30 +49,36 @@ function formatDate(iso: string) {
 export default function EmployerJobsPage() {
   const { session } = useSession();
   const [jobs, setJobs] = useState<EmployerJob[]>([]);
-  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  // 2. Use EmployerCandidate state instead of ApplicationRecord
+  const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabValue>("all");
+  
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
   async function refresh() {
     setLoading(true);
-    const [jobsRes, appsRes] = await Promise.all([
+    // 3. Grab token just like the dashboard does
+    const token = session?.accessToken || (session as any)?.token; 
+    
+    const [jobsRes, candidatesList] = await Promise.all([
       employerJobsApi.getAll(),
-      session?.email ? applicationsApi.getAll(session.email) : Promise.resolve([]),
+      token ? employerCandidatesApi.getAll(token) : Promise.resolve([]),
     ]);
 
     if (jobsRes.ok && jobsRes.data) {
       setJobs(jobsRes.data);
     }
 
-    const apps = Array.isArray(appsRes) ? appsRes : (appsRes as any)?.data ?? [];
-    setApplications(apps);
+    setCandidates(candidatesList || []);
     setLoading(false);
   }
 
   useEffect(() => {
     refresh();
-  }, [session?.email]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   const counts = useMemo(() => {
     return {
@@ -88,15 +94,34 @@ export default function EmployerJobsPage() {
     return jobs.filter((j) => j.status === activeTab);
   }, [jobs, activeTab]);
 
-  async function handleSetStatus(jobId: string, status: EmployerJobStatus) {
-    await employerJobsApi.setStatus(jobId, status);
+  function toggleMenu(e: React.MouseEvent<HTMLButtonElement>, jobId: string) {
+    e.stopPropagation();
+    if (openMenuId === jobId) {
+      closeMenu();
+    } else {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom + 4,
+        right: window.innerWidth - rect.right,
+      });
+      setOpenMenuId(jobId);
+    }
+  }
+
+  function closeMenu() {
     setOpenMenuId(null);
+    setMenuPos(null);
+  }
+
+  async function handleSetStatus(jobId: string, status: EmployerJobStatus) {
+    closeMenu();
+    await employerJobsApi.setStatus(jobId, status);
     refresh();
   }
 
   async function handleDelete(jobId: string) {
+    closeMenu();
     await employerJobsApi.remove(jobId);
-    setOpenMenuId(null);
     refresh();
   }
 
@@ -157,17 +182,18 @@ export default function EmployerJobsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredJobs.map((job, i) => {
+                {filteredJobs.map((job: any, i) => {
                   const palette = avatarPalette[i % avatarPalette.length];
-                  
-                  // Compute dynamic applicant count
-                  const dynamicCount = applications.filter((a) => {
-                    if ((a as any).jobId && (a as any).jobId === job.id) return true;
-                    return a.jobTitle?.trim().toLowerCase() === job.title?.trim().toLowerCase();
-                  }).length;
+
+                  // 4. Extract the reliable Job ID
+                  const actualJobId = job.id || job._id;
+
+                  // 5. Filter cleanly using the candidates API we imported
+                  const displayApplicants = candidates.filter((c) => c.jobId === actualJobId).length;
 
                   return (
-                    <tr key={job.id} className="transition-colors hover:bg-gray-50">
+                    // 6. Use actualJobId for keys and all menu interactions
+                    <tr key={actualJobId} className="transition-colors hover:bg-gray-50">
                       <td className="px-4 py-4 sm:px-5">
                         <div className="flex items-center gap-3">
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${palette.bg} ${palette.text}`}>
@@ -183,7 +209,7 @@ export default function EmployerJobsPage() {
                       </td>
                       <td className="hidden px-4 py-4 text-sm text-gray-600 md:table-cell">{job.department}</td>
                       <td className="px-4 py-4 text-center text-sm font-semibold text-gray-900">
-                        {dynamicCount || job.applicants || 0}
+                        {displayApplicants}
                       </td>
                       <td className="px-4 py-4">
                         <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-medium ${statusStyles[job.status]}`}>
@@ -192,31 +218,32 @@ export default function EmployerJobsPage() {
                       </td>
                       <td className="hidden px-4 py-4 text-sm text-gray-400 lg:table-cell">{formatDate(job.postedOn)}</td>
 
-                      <td className={`relative px-4 py-4 text-right sm:px-5 ${openMenuId === job.id ? "z-50" : ""}`}>
+                      <td className="px-4 py-4 text-right sm:px-5">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuId(openMenuId === job.id ? null : job.id);
-                          }}
+                          onClick={(e) => toggleMenu(e, actualJobId)}
                           className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                         >
                           <MoreVertical size={16} />
                         </button>
 
-                        {openMenuId === job.id && (
+                        {/* Position Fixed Dropdown */}
+                        {openMenuId === actualJobId && menuPos && (
                           <>
                             <div 
-                              className="fixed inset-0 z-10" 
+                              className="fixed inset-0 z-40 bg-transparent" 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setOpenMenuId(null);
+                                closeMenu();
                               }} 
                             />
-                            <div className="absolute right-4 z-20 mt-1 w-40 rounded-xl border border-gray-100 bg-white py-1 text-left shadow-lg sm:right-5">
+                            <div 
+                              className="fixed z-50 w-40 rounded-xl border border-gray-100 bg-white py-1 text-left shadow-lg"
+                              style={{ top: `${menuPos.top}px`, right: `${menuPos.right}px` }}
+                            >
                               <Link
-                                href={`/employer/jobs/new?id=${job.id}`}
-                                onClick={() => setOpenMenuId(null)}
+                                href={`/employer/jobs/new?id=${actualJobId}`}
+                                onClick={closeMenu}
                                 className="block w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
                               >
                                 Edit
@@ -224,7 +251,7 @@ export default function EmployerJobsPage() {
                               {job.status !== "active" && (
                                 <button
                                   type="button"
-                                  onClick={() => handleSetStatus(job.id, "active")}
+                                  onClick={() => handleSetStatus(actualJobId, "active")}
                                   className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
                                 >
                                   Mark Active
@@ -233,7 +260,7 @@ export default function EmployerJobsPage() {
                               {job.status !== "closed" && (
                                 <button
                                   type="button"
-                                  onClick={() => handleSetStatus(job.id, "closed")}
+                                  onClick={() => handleSetStatus(actualJobId, "closed")}
                                   className="w-full px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
                                 >
                                   Close Job
@@ -241,7 +268,7 @@ export default function EmployerJobsPage() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => handleDelete(job.id)}
+                                onClick={() => handleDelete(actualJobId)}
                                 className="w-full px-3 py-2 text-left text-xs text-red-500 hover:bg-red-50"
                               >
                                 Delete

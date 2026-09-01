@@ -58,10 +58,9 @@ export default function InterviewsPage() {
   const [newTime, setNewTime] = useState("");
 
   // Async data fetcher
-  // Async data fetcher
   async function refresh() {
     // If there's no token, stop loading and exit
-    if (!session?.token) {
+    if (!session?.accessToken) {
       setIsLoading(false);
       return;
     }
@@ -69,28 +68,19 @@ export default function InterviewsPage() {
     setIsLoading(true);
     try {
       // 1. Fetch Real Interviews
-      const realInterviews = await interviewsApi.getAll(session.token);
+      const realInterviews = await interviewsApi.getAll(session.accessToken);
       setInterviews(realInterviews);
 
-      // 2. Fetch Real Candidates for the dropdown
-      const queryParams = new URLSearchParams({ status: "SHORTLISTED" });
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
+      // 2. Fetch Real Candidates using your API file
+      const allCandidates = await employerCandidatesApi.getAll(session.accessToken);
       
-      const applicantsRes = await fetch(`${baseUrl}/applicants?${queryParams.toString()}`, {
-        headers: { Authorization: `Bearer ${session.token}` }
-      });
+      // Filter for candidates that are ready to be interviewed
+      const shortlistedCandidates = allCandidates.filter(
+        (candidate) => candidate.status === "SHORTLISTED" || candidate.stage === "Screening"
+      );
       
-      if (applicantsRes.ok) {
-        const rawApplicants = await applicantsRes.json();
-        const mappedCandidates = rawApplicants.map((a: any) => ({
-           id: a.id,
-           jobId: a.jobId,
-           name: (a.talentProfile?.firstName || "") + " " + (a.talentProfile?.lastName || ""),
-           role: a.job?.title || "Applicant",
-           status: a.status
-        }));
-        setCandidates(mappedCandidates);
-      }
+      setCandidates(shortlistedCandidates);
+      
     } catch (err) {
       console.error("Failed to load interviews or candidates:", err);
     } finally {
@@ -101,7 +91,7 @@ export default function InterviewsPage() {
 
   useEffect(() => {
     refresh();
-  }, [session?.token]);
+  }, [session?.accessToken]);
 
   const counts = useMemo(() => {
     return {
@@ -118,7 +108,7 @@ export default function InterviewsPage() {
   }, [interviews, activeTab]);
 
   async function handleScheduleSubmit() {
-    if (!session?.token || !selectedCandidateId || !scheduleDate || !scheduleTime) return;
+    if (!session?.accessToken || !selectedCandidateId || !scheduleDate || !scheduleTime) return;
     
     const candidate = candidates.find((c) => c.id === selectedCandidateId);
     if (!candidate) return;
@@ -139,8 +129,8 @@ export default function InterviewsPage() {
       }
 
       await interviewsApi.scheduleApplicationInterview(
-        session.token,
-        candidate.jobId, 
+        session.accessToken,
+        candidate.jobId,
         candidate.id,  
         {
           scheduledAt,
@@ -157,7 +147,7 @@ export default function InterviewsPage() {
       setInterviewType("Video Call");
       setPhoneNumber("");
       setInstructions("");
-      await refresh(); 
+      await refresh();
       
     } catch (err: any) {
       setError(err.message || "Something went wrong while scheduling.");
@@ -167,12 +157,12 @@ export default function InterviewsPage() {
   }
 
   async function handleCancel(interviewId: string) {
-    if (!session?.token) return;
+    if (!session?.accessToken) return;
     try {
-      await interviewsApi.setStatus(session.token, interviewId, "cancelled");
+      await interviewsApi.setStatus(session.accessToken, interviewId, "cancelled");
       await refresh(); // Reload list after cancel
     } catch (err) {
-      alert("Failed to cancel interview");
+      alert("Failed to cancel interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 
@@ -184,17 +174,17 @@ export default function InterviewsPage() {
   }
 
   async function handleRescheduleSubmit() {
-    if (!session?.token || !rescheduleId || !newDate || !newTime) return;
+    if (!session?.accessToken || !rescheduleId || !newDate || !newTime) return;
     try {
       await interviewsApi.reschedule(
-        session.token, 
-        rescheduleId, 
+        session.accessToken,
+        rescheduleId,
         new Date(`${newDate}T${newTime}`).toISOString()
       );
       setRescheduleId(null);
       await refresh(); // Reload list after reschedule
     } catch (err) {
-      alert("Failed to reschedule");
+      alert("Failed to reschedule interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 

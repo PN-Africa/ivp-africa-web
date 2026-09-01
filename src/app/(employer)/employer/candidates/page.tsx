@@ -6,7 +6,6 @@ import { Search, SlidersHorizontal, MoreVertical } from "lucide-react";
 import { useSession } from "@/lib/auth/useSession";
 import { employerCandidatesApi, EmployerCandidate, PipelineStage } from "@/lib/api/candidate";
 
-
 type TabValue = "All" | PipelineStage;
 
 const tabs: TabValue[] = ["All", "New", "Screening", "Interview", "Offered", "Hired"];
@@ -50,8 +49,11 @@ export default function CandidatesPage() {
   const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
   const [activeTab, setActiveTab] = useState<TabValue>("All");
   const [search, setSearch] = useState("");
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  
+  // 1. Add states to track popup open ID AND its viewport position
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
 
   async function refresh() {
     if (!session?.accessToken) return; 
@@ -66,8 +68,7 @@ export default function CandidatesPage() {
 
   useEffect(() => {
     refresh();
-  }, [session?.accessToken]); // Update dependency array to token
-
+  }, [session?.accessToken]);
 
   const filteredCandidates = useMemo(() => {
     return candidates.filter((c) => {
@@ -99,24 +100,42 @@ export default function CandidatesPage() {
     setPage(1);
   }
 
+  // 2. Logic to calculate exactly where to render the fixed popup
+  function toggleMenu(e: React.MouseEvent, candidateId: string) {
+    if (openMenuId === candidateId) {
+      closeMenu();
+    } else {
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setMenuPos({
+        top: rect.bottom, // directly beneath the button
+        right: window.innerWidth - rect.right, // anchored flush to the right of the button
+      });
+      setOpenMenuId(candidateId);
+    }
+  }
+
+  function closeMenu() {
+    setOpenMenuId(null);
+    setMenuPos(null);
+  }
+
   async function handleSetStage(jobId: string, candidateId: string, stage: PipelineStage) {
     if (!session?.accessToken) return;
     try {
       await employerCandidatesApi.setStage(jobId, candidateId, stage, session.accessToken);
-      setOpenMenuId(null);
+      closeMenu();
       refresh();
     } catch (error) {
       console.error(error);
     }
   }
 
-  // FIX: Make this async, pass token instead of email
   async function handleRemove(candidateId: string) {
     if (!session?.accessToken) return;
     
     try {
       await employerCandidatesApi.remove(candidateId, session.accessToken);
-      setOpenMenuId(null);
+      closeMenu();
       refresh();
     } catch (error) {
       console.error(error);
@@ -207,20 +226,25 @@ export default function CandidatesPage() {
                     <td className="hidden px-4 py-4 text-sm text-gray-400 lg:table-cell">
                       {formatTimeAgo(candidate.appliedAt)}
                     </td>
-                    <td className="relative px-4 py-4 text-right sm:px-5">
+                    {/* 3. Removed 'relative' from td to clean up layout hierarchy */}
+                    <td className="px-4 py-4 text-right sm:px-5">
                       <button
                         type="button"
-                        onClick={() => setOpenMenuId(openMenuId === candidate.id ? null : candidate.id)}
+                        onClick={(e) => toggleMenu(e, candidate.id)}
                         className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                         aria-label="Candidate actions"
                       >
                         <MoreVertical size={16} />
                       </button>
 
-                      {openMenuId === candidate.id && (
+                      {/* 4. Switched to a 'fixed' popover layout bypassing parent constraints */}
+                      {openMenuId === candidate.id && menuPos && (
                         <>
-                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                          <div className="absolute right-4 z-20 mt-1 w-44 rounded-xl border border-gray-100 bg-white py-1 text-left shadow-lg sm:right-5">
+                          <div className="fixed inset-0 z-[100]" onClick={closeMenu} />
+                          <div 
+                            className="fixed z-[110] mt-1 w-44 rounded-xl border border-gray-100 bg-white py-1 text-left shadow-lg"
+                            style={{ top: menuPos.top, right: menuPos.right }}
+                          >
                             <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase">Move to</p>
                             {stageOptions
                               .filter((s) => s !== candidate.stage)
