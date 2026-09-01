@@ -45,7 +45,7 @@ const HeroSection: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-6xl sm:text-7xl md:text-8xl lg:text-[5.5rem] xl:text-[9.5rem] font-heading font-light text-black mb-5 leading-[1.05]"
+              className="text-5xl sm:text-7xl md:text-8xl lg:text-[5.5rem] xl:text-[9.5rem] font-heading font-light text-black mb-5 leading-[1.05]"
             >
               Where <span className="text-[#8c52ff]">Africa's talent</span> <br />meets opportunity.
             </motion.h1>

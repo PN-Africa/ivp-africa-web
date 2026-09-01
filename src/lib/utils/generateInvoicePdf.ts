@@ -1,7 +1,7 @@
 import jsPDF from "jspdf";
-import type { PaymentRecord } from "@/lib/api/subscription";
+import type { RealPaymentRecord } from "@/lib/api/subscription";
 
-export function generateInvoicePdf(payment: PaymentRecord, companyName: string) {
+export function generateInvoicePdf(payment: RealPaymentRecord, companyName: string) {
   const doc = new jsPDF();
 
   // Header
@@ -24,7 +24,7 @@ export function generateInvoicePdf(payment: PaymentRecord, companyName: string) 
   // Invoice details
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
-  const issueDate = new Date(payment.date).toLocaleDateString("en-US", {
+  const issueDate = new Date(payment.createdAt).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -44,13 +44,16 @@ export function generateInvoicePdf(payment: PaymentRecord, companyName: string) 
   doc.text("AMOUNT", 165, 96);
 
   // Table row
+  const amountNum = Number(payment.amount) || 0;
+  const isSuccess = payment.status === "SUCCESS";
+
   doc.setFontSize(10);
   doc.setTextColor(20, 20, 20);
-  doc.text(payment.description, 25, 108);
-  doc.setTextColor(payment.status === "success" ? 34 : 220, payment.status === "success" ? 197 : 38, payment.status === "success" ? 94 : 38);
-  doc.text(payment.status === "success" ? "Paid" : "Failed", 130, 108);
+  doc.text(payment.plan?.name ?? "Subscription payment", 25, 108);
+  doc.setTextColor(isSuccess ? 34 : 220, isSuccess ? 197 : 38, isSuccess ? 94 : 38);
+  doc.text(isSuccess ? "Paid" : payment.status === "PENDING" ? "Pending" : "Failed", 130, 108);
   doc.setTextColor(20, 20, 20);
-  doc.text(`$${payment.amount.toFixed(2)}`, 165, 108);
+  doc.text(`$${amountNum.toFixed(2)}`, 165, 108);
 
   doc.setDrawColor(230, 230, 230);
   doc.line(20, 115, 190, 115);
@@ -59,7 +62,7 @@ export function generateInvoicePdf(payment: PaymentRecord, companyName: string) 
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.text("Total", 130, 128);
-  doc.text(`$${payment.amount.toFixed(2)}`, 165, 128);
+  doc.text(`$${amountNum.toFixed(2)}`, 165, 128);
 
   // Footer
   doc.setFont("helvetica", "normal");

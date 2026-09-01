@@ -76,12 +76,15 @@ async function handleLogin(e: FormEvent) {
     return;
   }
 
-  // 👇 ADDED THIS LINE: Save the token so API calls can use it! 👇
-  localStorage.setItem("access_token", result.accessToken);
+  // Admins should use the dedicated admin login page instead.
+if (result.user.role === "admin") {
+  setError({ submit: "Admin accounts must sign in through the admin portal." });
+  return;
+}
 
-  // (Optional) If profileApi is still using mock data, you can leave this here
-  // but eventually you will want to fetch this from the real backend too!
-  const existingProfile = profileApi.get(result.user.email);
+// 👇 rest stays the same
+localStorage.setItem("access_token", result.accessToken);
+const existingProfile = profileApi.get(result.user.email);
 
   session.set({
     id: result.user.id,

@@ -219,23 +219,14 @@ export default function SubscriptionPage() {
                         {payment.status === "SUCCESS" ? "Success" : payment.status === "PENDING" ? "Pending" : "Failed"}
                       </span>
                       <button
-                        type="button"
-                        onClick={() => {
-                          generateInvoicePdf(
-                            {
-                              id: payment.id,
-                              description: `${payment.plan?.name || "Subscription"} Plan`,
-                              date: payment.createdAt,
-                              amount: Number(payment.amount),
-                              status: payment.status.toLowerCase()
-                            }, 
-                            session?.displayName ?? "Company"
-                          );
-                        }}
-                        className="text-xs font-medium text-[#8A38F5] hover:underline"
-                      >
-                        Download PDF
-                      </button>
+  type="button"
+  onClick={() => {
+    generateInvoicePdf(payment, session?.displayName ?? "Company");
+  }}
+  className="text-xs font-medium text-[#8A38F5] hover:underline"
+>
+  Download PDF
+</button>
                     </div>
                   </div>
                 ))
