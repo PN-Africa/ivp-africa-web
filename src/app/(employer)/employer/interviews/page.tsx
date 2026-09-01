@@ -31,29 +31,35 @@ function formatDateTime(iso: string) {
 
 export default function InterviewsPage() {
   const { session } = useSession();
-
+  
+  // Data States
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
+  
+  // UI States
   const [activeTab, setActiveTab] = useState<TabValue>("upcoming");
   const [showSchedule, setShowSchedule] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
 
+  // Form State
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [interviewType, setInterviewType] = useState<InterviewType>("Video Call");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [instructions, setInstructions] = useState("");
-
+  
+  // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
 
+  // Async data fetcher
   async function refresh() {
+    // If there's no token, stop loading and exit
     if (!session?.accessToken) {
       setIsLoading(false);
       return;
@@ -61,30 +67,24 @@ export default function InterviewsPage() {
 
     setIsLoading(true);
     try {
+      // 1. Fetch Real Interviews
       const realInterviews = await interviewsApi.getAll(session.accessToken);
       setInterviews(realInterviews);
 
-      const queryParams = new URLSearchParams({ status: "SHORTLISTED" });
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
-
-      const applicantsRes = await fetch(`${baseUrl}/applicants?${queryParams.toString()}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` }
-      });
-
-      if (applicantsRes.ok) {
-        const rawApplicants = await applicantsRes.json();
-        const mappedCandidates = rawApplicants.map((a: any) => ({
-           id: a.id,
-           jobId: a.jobId,
-           name: (a.talentProfile?.firstName || "") + " " + (a.talentProfile?.lastName || ""),
-           role: a.job?.title || "Applicant",
-           status: a.status
-        }));
-        setCandidates(mappedCandidates);
-      }
+      // 2. Fetch Real Candidates using your API file
+      const allCandidates = await employerCandidatesApi.getAll(session.accessToken);
+      
+      // Filter for candidates that are ready to be interviewed
+      const shortlistedCandidates = allCandidates.filter(
+        (candidate) => candidate.status === "SHORTLISTED" || candidate.stage === "Screening"
+      );
+      
+      setCandidates(shortlistedCandidates);
+      
     } catch (err) {
       console.error("Failed to load interviews or candidates:", err);
     } finally {
+      // Always stop loading, even if the API throws an error
       setIsLoading(false);
     }
   }
@@ -109,7 +109,7 @@ export default function InterviewsPage() {
 
   async function handleScheduleSubmit() {
     if (!session?.accessToken || !selectedCandidateId || !scheduleDate || !scheduleTime) return;
-
+    
     const candidate = candidates.find((c) => c.id === selectedCandidateId);
     if (!candidate) return;
 
@@ -118,7 +118,7 @@ export default function InterviewsPage() {
 
     try {
       const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-
+      
       let locationStr = "";
       if (interviewType === "Video Call") {
         locationStr = `Virtual Meeting: https://meet.ivpafrica.com/${crypto.randomUUID().slice(0, 8)}`;
@@ -131,7 +131,7 @@ export default function InterviewsPage() {
       await interviewsApi.scheduleApplicationInterview(
         session.accessToken,
         candidate.jobId,
-        candidate.id,
+        candidate.id,  
         {
           scheduledAt,
           location: locationStr,
@@ -139,6 +139,7 @@ export default function InterviewsPage() {
         }
       );
 
+      // Reset form and re-fetch from backend
       setShowSchedule(false);
       setSelectedCandidateId("");
       setScheduleDate("");
@@ -147,7 +148,7 @@ export default function InterviewsPage() {
       setPhoneNumber("");
       setInstructions("");
       await refresh();
-
+      
     } catch (err: any) {
       setError(err.message || "Something went wrong while scheduling.");
     } finally {
@@ -159,9 +160,9 @@ export default function InterviewsPage() {
     if (!session?.accessToken) return;
     try {
       await interviewsApi.setStatus(session.accessToken, interviewId, "cancelled");
-      await refresh();
+      await refresh(); // Reload list after cancel
     } catch (err) {
-      alert("Failed to cancel interview");
+      alert("Failed to cancel interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 
@@ -181,11 +182,13 @@ export default function InterviewsPage() {
         new Date(`${newDate}T${newTime}`).toISOString()
       );
       setRescheduleId(null);
-      await refresh();
+      await refresh(); // Reload list after reschedule
     } catch (err) {
-      alert("Failed to reschedule");
+      alert("Failed to reschedule interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
+
+  // --- UI RENDERING ---
 
   if (isLoading) {
     return (
@@ -214,6 +217,7 @@ export default function InterviewsPage() {
         </button>
       </div>
 
+      {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-gray-100 sm:gap-2 mt-6">
         {tabs.map((tab) => (
           <button
@@ -238,6 +242,7 @@ export default function InterviewsPage() {
         ))}
       </div>
 
+      {/* Interview cards */}
       <div className="flex flex-col gap-3 mt-4">
         {filteredInterviews.map((interview, i) => {
           const palette = avatarPalette[i % avatarPalette.length];
@@ -321,6 +326,7 @@ export default function InterviewsPage() {
         )}
       </div>
 
+      {/* Schedule modal */}
       {showSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
@@ -446,6 +452,7 @@ export default function InterviewsPage() {
         </div>
       )}
 
+      {/* Reschedule modal */}
       {rescheduleId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">

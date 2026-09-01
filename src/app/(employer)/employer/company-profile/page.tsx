@@ -16,6 +16,23 @@ function getInitial(name: string) {
   return name ? name.trim()[0]?.toUpperCase() : "?";
 }
 
+/**
+ * Safely extracts total applicant count from various API payload structures
+ * (Prisma _count object, arrays, direct numbers, or custom property keys).
+ */
+function getApplicantCount(job: any): number {
+  if (!job) return 0;
+  if (typeof job._count?.applications === "number") return job._count.applications;
+  if (typeof job._count?.applicants === "number") return job._count.applicants;
+  if (typeof job.applicantsCount === "number") return job.applicantsCount;
+  if (typeof job.applicationsCount === "number") return job.applicationsCount;
+  if (Array.isArray(job.applicants)) return job.applicants.length;
+  if (Array.isArray(job.applications)) return job.applications.length;
+  if (typeof job.applicants === "number") return job.applicants;
+  if (typeof job.applications === "number") return job.applications;
+  return 0;
+}
+
 const statusStyles: Record<string, string> = {
   active: "text-green-600",
   draft: "text-amber-600",
@@ -63,22 +80,20 @@ export default function CompanyProfilePage() {
       if (res.ok && res.data) {
         setProfile(res.data);
       } else {
-        // Just log the error to state, it will trigger the empty profile view
         setError(res.message || "No profile found.");
       }
 
-      // 2. Fetch Jobs (FIXED)
+      // 2. Fetch Jobs
       if (session?.email) {
-        // Await the API call and extract the data property
         const jobsRes = await employerJobsApi.getAll();
-        
+
         if (jobsRes.ok && Array.isArray(jobsRes.data)) {
-          setJobs(jobsRes.data); // Set jobs to the actual array
+          setJobs(jobsRes.data);
         } else {
-          setJobs([]); // Fallback to an empty array to prevent filter errors
+          setJobs([]);
         }
       }
-      
+
       setLoading(false);
     }
 
@@ -86,7 +101,6 @@ export default function CompanyProfilePage() {
   }, [session?.email]);
 
   function openEdit() {
-    // We remove the `if (!profile) return;` so you can create a new profile!
     setDraft({
       companyName: profile?.companyName ?? "",
       contactPerson: profile?.contactPerson ?? "",
@@ -154,7 +168,7 @@ export default function CompanyProfilePage() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
             Company Profile
@@ -187,7 +201,7 @@ export default function CompanyProfilePage() {
           </button>
         </div>
       ) : (
-        /* IF PROFILE EXISTS, SHOW IT normally */
+        /* IF PROFILE EXISTS */
         <div className="space-y-6">
           {/* Company Header Card */}
           <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
@@ -241,7 +255,7 @@ export default function CompanyProfilePage() {
                     <span>
                       Website:{" "}
                       <a
-                        href={profile.website.startsWith('http') ? profile.website : `https://${profile.website}`}
+                        href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`}
                         target="_blank"
                         rel="noreferrer"
                         className="font-semibold text-[#8A38F5] hover:underline"
@@ -303,33 +317,36 @@ export default function CompanyProfilePage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {activeJobs.map((job) => (
-                  <Link
-                    key={job.id}
-                    href="/employer/jobs"
-                    className="rounded-2xl border border-gray-100 bg-white p-4 transition-shadow hover:shadow-md sm:p-5"
-                  >
-                    <p className="text-sm font-semibold text-gray-900">{job.title}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">
-                      {job.location} · {job.workMode}
-                    </p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="rounded-full bg-[#EDE7F8] px-2.5 py-1 text-[11px] font-medium text-[#8A38F5]">
-                        {job.applicants} Applicants
-                      </span>
-                      <span className={`text-xs font-semibold ${statusStyles[job.status]}`}>
-                        {statusLabels[job.status]}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+                {activeJobs.map((job) => {
+                  const count = getApplicantCount(job);
+                  return (
+                    <Link
+                      key={job.id}
+                      href="/employer/jobs"
+                      className="rounded-2xl border border-gray-100 bg-white p-4 transition-shadow hover:shadow-md sm:p-5"
+                    >
+                      <p className="text-sm font-semibold text-gray-900">{job.title}</p>
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {job.location} · {job.workMode}
+                      </p>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="rounded-full bg-[#EDE7F8] px-2.5 py-1 text-[11px] font-medium text-[#8A38F5]">
+                          {count} {count === 1 ? "Applicant" : "Applicants"}
+                        </span>
+                        <span className={`text-xs font-semibold ${statusStyles[job.status] || "text-gray-500"}`}>
+                          {statusLabels[job.status] || job.status}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Edit Modal (This is what I meant by the Edit Modal JSX Code!) */}
+      {/* Edit Modal */}
       {editing && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4">
           <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
