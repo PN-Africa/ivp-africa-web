@@ -26,24 +26,37 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function EmployerNotificationsPage() {
-  const { session } = useSession();
+  const { session, status } = useSession();
   const [notifications, setNotifications] = useState<EmployerNotification[]>([]);
   const [activeTab, setActiveTab] = useState<TabValue>("all");
+  const [loading, setLoading] = useState(true);
 
-  function refresh() {
-    if (!session?.email) return;
-    setNotifications(employerNotificationsApi.getAll(session.email));
+  async function refresh() {
+    try {
+      setLoading(true);
+      const data = await employerNotificationsApi.getAll();
+      setNotifications(data);
+    } catch (error) {
+      console.error("Failed to load notifications:", error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    refresh();
-  }, [session?.email]);
+    // 1. Properly close the session block
+    if (session) {
+      refresh();
+      
+      // Auto-refresh every 30 seconds
+      const intervalId = setInterval(() => {
+        refresh();
+      }, 30000);
 
-  useEffect(() => {
-    const unsubscribe = employerNotificationsApi.subscribe(refresh);
-    return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.email]);
+      // Cleanup interval on unmount
+      return () => clearInterval(intervalId);
+    }
+  }, [session]); // 2. Add session to the dependency array
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
@@ -52,23 +65,48 @@ export default function EmployerNotificationsPage() {
     return notifications;
   }, [notifications, activeTab]);
 
-  function handleClick(notification: EmployerNotification) {
-    if (!session?.email || notification.read) return;
-    employerNotificationsApi.markAsRead(session.email, notification.id);
-    refresh();
+  async function handleClick(notification: EmployerNotification) {
+    if (notification.read) return;
+    try {
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+      );
+      await employerNotificationsApi.markAsRead(notification.id);
+    } catch (error) {
+      console.error("Failed to mark as read:", error);
+      refresh();
+    }
   }
 
-  function handleMarkAllRead() {
-    if (!session?.email) return;
-    employerNotificationsApi.markAllAsRead(session.email);
-    refresh();
+  async function handleMarkAllRead() {
+    try {
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      await employerNotificationsApi.markAllAsRead();
+    } catch (error) {
+      console.error("Failed to mark all as read:", error);
+      refresh();
+    }
   }
 
-  function handleRemove(id: string, e: React.MouseEvent) {
+  async function handleRemove(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!session?.email) return;
-    employerNotificationsApi.remove(session.email, id);
-    refresh();
+    try {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      await employerNotificationsApi.remove(id);
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+      refresh();
+    }
+  }
+
+  // 3. Actually use the loading and status states to show a loading screen!
+  // We only show it if we have 0 notifications so the screen doesn't flash every 30 seconds during background refresh.
+  if (status === "loading" || (loading && notifications.length === 0)) {
+    return (
+      <div className="flex min-h-[200px] items-center justify-center">
+        <p className="text-sm text-gray-500 animate-pulse">Loading notifications...</p>
+      </div>
+    );
   }
 
   return (
@@ -117,7 +155,6 @@ export default function EmployerNotificationsPage() {
         {filteredNotifications.map((notification) => {
           const { icon: Icon, bg, text } = typeIcons[notification.type];
           return (
-            /* FIXED: Changed outer <button> to a <div> and added `cursor-pointer` to className */
             <div
               key={notification.id}
               onClick={() => handleClick(notification)}
@@ -138,7 +175,6 @@ export default function EmployerNotificationsPage() {
               <div className="flex shrink-0 items-center gap-3">
                 {!notification.read && <span className="h-2 w-2 rounded-full bg-[#8A38F5]" />}
                 
-                {/* The inner button remains untouched. Its e.stopPropagation() prevents the outer div's onClick from firing. */}
                 <button
                   type="button"
                   onClick={(e) => handleRemove(notification.id, e)}

@@ -158,8 +158,12 @@ export default function InterviewsPage() {
 
   async function handleCancel(interviewId: string) {
     if (!session?.accessToken) return;
+  
     try {
-      await interviewsApi.setStatus(session.accessToken, interviewId, "cancelled");
+    // 1. Change 'setStatus' to 'cancel'
+    // 2. Remove the '"cancelled"' string argument
+      await interviewsApi.cancel(session.accessToken, interviewId);
+    
       await refresh(); // Reload list after cancel
     } catch (err) {
       alert("Failed to cancel interview: " + (err instanceof Error ? err.message : String(err)));

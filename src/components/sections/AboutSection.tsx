@@ -89,7 +89,7 @@ const AboutSection: React.FC = () => {
               </div>
             </div>
 
-            <Button href="/about" variant="primary" className='bg-white border border-black border-2'>
+            <Button href="/about" variant="primary" className='bg-white text-black hover:bg-white border border-black border-2'>
               Learn More About Us
             </Button>
           </motion.div>

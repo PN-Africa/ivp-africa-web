@@ -121,7 +121,7 @@ const Navbar: React.FC = () => {
                 href="/login"
                 variant="outline"
                 size="sm"
-                className="bg-white text-black border border-black hover:text-black hover:bg-[--foreground] px-6 py-2.5 rounded-full font-semibold transition-all duration-300"
+                className="bg-white text-black border border-black hover:text-white hover:bg-[--foreground] px-6 py-2.5 rounded-full font-semibold transition-all duration-300"
               >
                 Sign In
               </Button>
@@ -129,7 +129,7 @@ const Navbar: React.FC = () => {
                 href="/signUp"
                 variant="primary"
                 size="sm"
-                className="bg-primary text-black hover:bg-[#8c52ff] px-6 py-2.5 rounded-full shadow-md font-semibold transition-all duration-300"
+                className="bg-primary text-white hover:bg-[#8c52ff] px-6 py-2.5 rounded-full shadow-md font-semibold transition-all duration-300"
               >
                 Get Started
               </Button>
@@ -197,7 +197,7 @@ const Navbar: React.FC = () => {
                 href="/login"
                 variant="outline"
                 size="md"
-                className="w-full text-black  border border-gray-200 hover:border-black py-3 rounded-lg font-semibold flex justify-center text-center transition-colors"
+                className="w-full bg-white text-black hover:bg-black hover:text-white border border-gray-200 hover:border-black py-3 rounded-lg font-semibold flex justify-center text-center transition-colors"
               >
                 Sign In
               </Button>
@@ -205,7 +205,7 @@ const Navbar: React.FC = () => {
                 href="/signUp"
                 variant="primary"
                 size="md"
-                className="w-full bg-primary text-black hover:text-white hover:bg-black py-3 rounded-lg font-semibold shadow-md transition-colors duration-300 flex justify-center text-center"
+                className="w-full bg-primary text-white hover:text-white hover:bg-black py-3 rounded-lg font-semibold shadow-md transition-colors duration-300 flex justify-center text-center"
               >
                 Get Started
               </Button>
