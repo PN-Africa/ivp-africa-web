@@ -71,7 +71,7 @@ const HeroSection: React.FC = () => {
                 external
                 variant="outline"
                 size="md"
-                className="w-full sm:w-auto justify-center text-black bg-transparent border-2 border-black transition-all duration-300 py-3.5 px-6 font-semibold"
+                className="w-full sm:w-auto justify-center text-black bg-white border-2 border-black transition-all duration-300 py-3.5 px-6 font-semibold"
               >
                 I'm looking for a job
               </Button>
