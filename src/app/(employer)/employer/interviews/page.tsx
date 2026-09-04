@@ -31,26 +31,22 @@ function formatDateTime(iso: string) {
 
 export default function InterviewsPage() {
   const { session } = useSession();
-  
-  // Data States
+
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [candidates, setCandidates] = useState<EmployerCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // UI States
+
   const [activeTab, setActiveTab] = useState<TabValue>("upcoming");
   const [showSchedule, setShowSchedule] = useState(false);
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
 
-  // Form State
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [interviewType, setInterviewType] = useState<InterviewType>("Video Call");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [instructions, setInstructions] = useState("");
-  
-  // Submission State
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +80,6 @@ export default function InterviewsPage() {
     } catch (err) {
       console.error("Failed to load interviews or candidates:", err);
     } finally {
-      // Always stop loading, even if the API throws an error
       setIsLoading(false);
     }
   }
@@ -118,7 +113,7 @@ export default function InterviewsPage() {
 
     try {
       const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-      
+
       let locationStr = "";
       if (interviewType === "Video Call") {
         locationStr = `Virtual Meeting: https://meet.ivpafrica.com/${crypto.randomUUID().slice(0, 8)}`;
@@ -139,7 +134,6 @@ export default function InterviewsPage() {
         }
       );
 
-      // Reset form and re-fetch from backend
       setShowSchedule(false);
       setSelectedCandidateId("");
       setScheduleDate("");
@@ -193,13 +187,11 @@ export default function InterviewsPage() {
       );
       
       setRescheduleId(null);
-      await refresh(); // Reload list after reschedule
+      await refresh();
     } catch (err) {
       alert("Failed to reschedule interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
-
-  // --- UI RENDERING ---
 
   if (isLoading) {
     return (
@@ -228,7 +220,6 @@ export default function InterviewsPage() {
         </button>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto border-b border-gray-100 sm:gap-2 mt-6">
         {tabs.map((tab) => (
           <button
@@ -253,7 +244,6 @@ export default function InterviewsPage() {
         ))}
       </div>
 
-      {/* Interview cards */}
       <div className="flex flex-col gap-3 mt-4">
         {filteredInterviews.map((interview, i) => {
           const palette = avatarPalette[i % avatarPalette.length];
@@ -337,7 +327,6 @@ export default function InterviewsPage() {
         )}
       </div>
 
-      {/* Schedule modal */}
       {showSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
@@ -463,7 +452,6 @@ export default function InterviewsPage() {
         </div>
       )}
 
-      {/* Reschedule modal */}
       {rescheduleId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
