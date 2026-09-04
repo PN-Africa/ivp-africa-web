@@ -26,7 +26,7 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function EmployerNotificationsPage() {
-  const { session, status } = useSession();
+  const { session } = useSession();
   const [notifications, setNotifications] = useState<EmployerNotification[]>([]);
   const [activeTab, setActiveTab] = useState<TabValue>("all");
   const [loading, setLoading] = useState(true);
