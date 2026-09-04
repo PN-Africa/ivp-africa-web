@@ -19,8 +19,6 @@ import { getRecommendedJobs } from "@/lib/utils/recommendations";
 import { getLatestUpdates, type UpdateItem } from "@/lib/utils/dashboardUpdates";
 import type { ApplicationRecord } from "@/lib/types/application";
 import { talentJobsApi, type TalentJob } from "@/lib/utils/talentJobs";
-import type { Job } from "@/app/(talent)/talent/jobs/job";
- 
 import { profileCompletionApi } from "@/lib/api/profileCompletion";
 
 

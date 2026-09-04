@@ -106,7 +106,7 @@ export default function EmployerDashboardPage() {
         </div>
         <Link
           href="/employer/jobs/new"
-          className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#8A38F5] px-4 py-2 text-xs font-semibold text-black transition-colors hover:bg-[#7226e0] sm:px-4 sm:py-2.5 sm:text-sm"
+          className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-[#8A38F5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#7226e0] sm:px-4 sm:py-2.5 sm:text-sm"
         >
           <Plus size={15} className="sm:size-4" />
           Post a Job

@@ -93,14 +93,14 @@ const AboutPage: React.FC = () => {
                   href="/signUp"
                   external
                   variant="primary"
-                  className="bg-black text-white hover:bg-black/80 px-8 py-4 shadow-lg hover:shadow-xl transition-all"
+                  className="bg-black text-white px-8 py-4 shadow-lg transition-all"
                 >
                   I'm looking for a job
                 </Button>
                 <Button 
                   href="/signUp" 
                   variant="outline"
-                  className="px-8 py-4 hover:bg-gray-50 hover:text-white transition-all shadow-lg bg-white"
+                  className="bg-black text-white px-8 py-4 shadow-lg transition-all"
                 >
                   I'm hiring talent
                 </Button>
@@ -297,7 +297,7 @@ const AboutPage: React.FC = () => {
                 external
                 variant="secondary"
                 size="lg"
-                className="bg-white text-primary hover:bg-gray-50 hover:text-white border-white px-10 shadow-xl w-full sm:w-auto"
+                className="bg-white text-black border-white px-10 shadow-xl w-full sm:w-auto"
               >
                 Get Started Today
               </Button>

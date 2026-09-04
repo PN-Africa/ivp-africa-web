@@ -109,8 +109,8 @@ const ServicesPage: React.FC = () => {
               Services We <span className="text-[#8c52ff]">Offer</span>
             </h1>
             <p className="text-black/60 text-base md:text-lg lg:text-xl max-w-3xl mx-auto mb-10 leading-relaxed px-4">
-              From AI-powered solutions to stunning web applications and creative designs,
-              we provide comprehensive services to transform your ideas into reality.
+              Providing a comprehensive suite of services to empower your career journey and streamline 
+              the hiring process for employers across Africa.
             </p>
           </motion.div>
         </div>

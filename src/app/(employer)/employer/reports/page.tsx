@@ -30,28 +30,28 @@ export default function ReportsPage() {
   const [jobs, setJobs] = useState<EmployerJob[]>([]);
   const [range, setRange] = useState<"Weekly" | "Monthly">("Monthly");
 
-  useEffect(() => {
-    if (!session?.accessToken) return;
+ useEffect(() => {
+  if (!session?.accessToken) return;
+  const token = session.accessToken;
 
-    async function loadReportData() {
-      try {
-        // Fetch both candidates and jobs concurrently
-        const [candidatesData, jobsRes] = await Promise.all([
-          employerCandidatesApi.getAll(session.accessToken),
-          employerJobsApi.getAll()
-        ]);
-        
-        setCandidates(Array.isArray(candidatesData) ? candidatesData : []);
-        setJobs(jobsRes.ok && jobsRes.data ? jobsRes.data : []);
-      } catch (error) {
-        console.error("Error fetching report data:", error);
-        setCandidates([]);
-        setJobs([]);
-      }
+  async function loadReportData() {
+    try {
+      const [candidatesData, jobsRes] = await Promise.all([
+        employerCandidatesApi.getAll(token),
+        employerJobsApi.getAll()
+      ]);
+
+      setCandidates(Array.isArray(candidatesData) ? candidatesData : []);
+      setJobs(jobsRes.ok && jobsRes.data ? jobsRes.data : []);
+    } catch (error) {
+      console.error("Error fetching report data:", error);
+      setCandidates([]);
+      setJobs([]);
     }
+  }
 
-    loadReportData();
-  }, [session?.accessToken]);
+  loadReportData();
+}, [session?.accessToken]);
 
   const totalApplications = candidates.length;
 
@@ -89,32 +89,32 @@ export default function ReportsPage() {
   }, [candidates]);
 
   // --- 3. Dynamic Applications Over Time (Last 6 Months) ---
-  const dynamicMonthlyTrend = useMemo(() => {
-    const result = [];
-    const now = new Date();
-    
-    // Generate the last 6 months layout
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      result.push({
-        month: d.toLocaleString('default', { month: 'short' }),
-        monthIndex: d.getMonth(),
-        year: d.getFullYear(),
-        applications: 0
-      });
-    }
+ const dynamicMonthlyTrend = useMemo(() => {
+  const result: { month: string; monthIndex: number; year: number; applications: number }[] = [];
+  const now = new Date();
 
-    // Populate with real data
-    candidates.forEach(c => {
-      const applied = new Date(c.appliedAt);
-      const match = result.find(r => r.monthIndex === applied.getMonth() && r.year === applied.getFullYear());
-      if (match) {
-        match.applications += 1;
-      }
+  // Generate the last 6 months layout
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push({
+      month: d.toLocaleString('default', { month: 'short' }),
+      monthIndex: d.getMonth(),
+      year: d.getFullYear(),
+      applications: 0
     });
+  }
 
-    return result;
-  }, [candidates]);
+  // Populate with real data
+  candidates.forEach(c => {
+    const applied = new Date(c.appliedAt);
+    const match = result.find(r => r.monthIndex === applied.getMonth() && r.year === applied.getFullYear());
+    if (match) {
+      match.applications += 1;
+    }
+  });
+
+  return result;
+}, [candidates]);
 
   // --- 4. Dynamic Department Breakdown ---
   const dynamicDepartmentBreakdown = useMemo(() => {

@@ -116,8 +116,8 @@ export const CONTACT_INFO = {
   email: 'workwithivp@gmail.com',
   phone: '+2348058651819',
   location: 'Nigeria',
+  serviceFormUrl: 'https://forms.gle/your-actual-form-link-here',
 };
-
 // API Endpoints
 export const API_ENDPOINTS = {
   contact: '/api/contact',

@@ -9,7 +9,6 @@ export interface EmployerNotification {
   read: boolean;
 }
 
-// Backend DB Response Type
 interface BackendNotification {
   id: string;
   userId: string;
@@ -22,33 +21,48 @@ interface BackendNotification {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
 
-// Helper function to handle authenticated requests
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  // Retrieve token from your preferred storage (e.g., localStorage, cookie, or session)
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  // Reads access_token (snake_case) from LocalStorage
+  const token = typeof window !== "undefined" 
+    ? (localStorage.getItem("access_token") || localStorage.getItem("accessToken")) 
+    : null;
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    },
-  });
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+  
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/${cleanEndpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    console.error("Network connection error:", error);
+    throw new Error("Unable to reach the backend server. Please check network/backend status.");
+  }
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || "An error occurred while fetching data.");
+    const errorMessage = errorData.message || errorData.error || response.statusText || "An error occurred";
+    throw new Error(`[HTTP ${response.status}] ${cleanEndpoint}: ${errorMessage}`);
   }
 
   return response.json();
 }
 
-// Normalizer function to map backend data model to UI interface
 function transformNotification(item: BackendNotification): EmployerNotification {
   return {
     id: item.id,
-    type: item.type.toLowerCase() as EmployerNotificationType,
+    type: (item.type?.toLowerCase() as EmployerNotificationType) || "application",
     title: item.title,
     description: item.description,
     createdAt: item.createdAt,
@@ -57,32 +71,33 @@ function transformNotification(item: BackendNotification): EmployerNotification 
 }
 
 export const employerNotificationsApi = {
-  // 1. Get all notifications
   async getAll(): Promise<EmployerNotification[]> {
-    const data: BackendNotification[] = await fetchWithAuth("/notifications", {
-      method: "GET",
-    });
-    return data.map(transformNotification);
+    try {
+      const data: BackendNotification[] = await fetchWithAuth("notifications", {
+        method: "GET",
+      });
+      
+      if (!Array.isArray(data)) {
+        console.warn("Expected array for notifications, received:", data);
+        return [];
+      }
+      
+      return data.map(transformNotification);
+    } catch (error) {
+      console.error("Error fetching notifications list:", error);
+      return []; // Return empty array to prevent UI crashes
+    }
   },
 
-  // 2. Mark a single notification as read
   async markAsRead(id: string): Promise<void> {
-    await fetchWithAuth(`/notifications/${id}/read`, {
-      method: "PATCH",
-    });
+    await fetchWithAuth(`notifications/${id}/read`, { method: "PATCH" });
   },
 
-  // 3. Mark all notifications as read
   async markAllAsRead(): Promise<void> {
-    await fetchWithAuth("/notifications/read-all", {
-      method: "PATCH",
-    });
+    await fetchWithAuth("notifications/read-all", { method: "PATCH" });
   },
 
-  // 4. Remove a notification
   async remove(id: string): Promise<void> {
-    await fetchWithAuth(`/notifications/${id}`, {
-      method: "DELETE",
-    });
+    await fetchWithAuth(`notifications/${id}`, { method: "DELETE" });
   },
 };

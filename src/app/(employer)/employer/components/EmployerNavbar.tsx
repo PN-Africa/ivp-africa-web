@@ -18,11 +18,38 @@ export function EmployerTopbar() {
   const router = useRouter();
 
   useEffect(() => {
+    // Only run if the user is authenticated
     if (!session?.email) return;
-    const update = () => setUnreadCount(employerNotificationsApi.unreadCount(session.email));
-    update();
-    const unsubscribe = employerNotificationsApi.subscribe(update);
-    return unsubscribe;
+
+    let isMounted = true;
+
+    const fetchNotifications = async () => {
+      try {
+        // Fetch all notifications from your backend
+        const notifications = await employerNotificationsApi.getAll();
+        
+        if (isMounted) {
+          // Count the ones that are NOT read
+          const unread = notifications.filter((n) => !n.read).length;
+          setUnreadCount(unread);
+        }
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error);
+      }
+    };
+
+    // Initial fetch
+    fetchNotifications();
+
+    // Since your API doesn't have a built-in WebSocket "subscribe" method,
+    // we use a polling interval to check for new notifications every 30 seconds.
+    const intervalId = setInterval(fetchNotifications, 30000);
+
+    // Cleanup function when component unmounts
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
   }, [session?.email]);
 
   return (

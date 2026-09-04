@@ -71,19 +71,27 @@ const ServicesSection: React.FC = () => {
   };
 
   return (
-    <section ref={sectionRef} id="services" className="bg-white lg:px-20 py-20 section-padding">
-      <div className="section-container">
+    <section 
+      ref={sectionRef} 
+      id="services" 
+      // Fluid padding: smaller on mobile, larger on desktop
+      className="bg-white px-4 sm:px-8 lg:px-20 py-12 md:py-16 lg:py-24 w-full"
+    >
+      {/* Centered container with max-width for ultra-wide screens */}
+      <div className="max-w-7xl mx-auto w-full">
+        
         <SectionHeading
           className="text-gray-900"
-          title="Services I Offer"
-          subtitle="From development to design, We provide comprehensive opportunity to bring your vision to life."
+          title="Services We Offer"
+          subtitle="From development to design, we provide comprehensive opportunities to bring your vision to life."
         />
 
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate={isVisible ? 'visible' : 'hidden'}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+          // Responsive grid and gaps
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 mt-10 md:mt-12"
         >
           {SERVICES.map((service, index) => {
             // Safe fallback to FaCode if an unmapped string is passed or icon is undefined
@@ -93,31 +101,34 @@ const ServicesSection: React.FC = () => {
               <motion.div
                 key={service.id ? `${service.id}-${index}` : `service-${index}`}
                 variants={itemVariants}
-                className="card group bg-white border border-gray-100 p-6 sm:p-8 lg:p-10 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-[#8c52ff]/10 hover:border-[#8c52ff]/30 hover:-translate-y-1.5 transition-all duration-300 ease-out"
+                // Added flex-col and h-full to make all cards equal height
+                className="group bg-white border border-gray-100 p-6 sm:p-8 rounded-2xl sm:rounded-3xl shadow-sm hover:shadow-xl hover:shadow-[#8c52ff]/10 hover:border-[#8c52ff]/30 hover:-translate-y-1.5 transition-all duration-300 ease-out flex flex-col h-full"
               >
-                {/* Icon */}
-                <div className="w-14 h-14 bg-outline rounded-xl flex items-center justify-center mb-6 transition-colors duration-300">
-                  <Icon className="text-2xl text-secondary group-hover:text-primary transition-colors duration-300" />
+                {/* Icon Container - slightly smaller on mobile */}
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-50 group-hover:bg-[#8c52ff]/10 border border-gray-100 group-hover:border-[#8c52ff]/20 rounded-xl flex items-center justify-center mb-5 sm:mb-6 transition-colors duration-300">
+                  <Icon className="text-xl sm:text-2xl text-gray-400 group-hover:text-[#8c52ff] transition-colors duration-300" />
                 </div>
 
                 {/* Title */}
-                <h3 className="text-xl font-bold text-primary mb-4 transition-colors duration-300">
+                <h3 className="text-lg sm:text-xl font-bold text-gray-900 group-hover:text-[#8c52ff] mb-3 sm:mb-4 transition-colors duration-300">
                   {service.title}
                 </h3>
 
                 {/* Description */}
-                <p className="text-grayDark group-hover:text-black mb-6 transition-colors duration-300">
+                <p className="text-sm sm:text-base text-gray-500 group-hover:text-gray-700 mb-6 transition-colors duration-300 leading-relaxed">
                   {service.description}
                 </p>
 
-                {/* Features */}
-                <ul className="space-y-2 mb-6">
+                {/* Features - mt-auto pushes this list to the bottom of the card */}
+                <ul className="space-y-2.5 mt-auto pt-4 border-t border-gray-50">
                   {service.features?.slice(0, 4).map((feature, featureIdx) => (
                     <li
                       key={`${service.id || index}-feat-${featureIdx}`}
-                      className="flex items-center gap-2 text-sm text-grayDark group-hover:text-grayMedium transition-colors duration-300"
+                      className="flex items-start gap-2.5 text-xs sm:text-sm text-gray-500 group-hover:text-gray-800 transition-colors duration-300"
                     >
-                      {feature}
+                      {/* Optional: Add a small checkmark or bullet point before features */}
+                      <span className="text-[#8c52ff] mt-0.5 opacity-70">✦</span>
+                      <span className="flex-1 leading-snug">{feature}</span>
                     </li>
                   ))}
                 </ul>
@@ -125,6 +136,7 @@ const ServicesSection: React.FC = () => {
             );
           })}
         </motion.div>
+        
       </div>
     </section>
   );

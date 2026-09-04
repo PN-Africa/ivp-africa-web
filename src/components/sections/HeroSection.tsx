@@ -71,7 +71,7 @@ const HeroSection: React.FC = () => {
                 external
                 variant="outline"
                 size="md"
-                className="w-full sm:w-auto justify-center text-black bg-transparent hover:text-white border-2 border-black transition-all duration-300 py-3.5 px-6 font-semibold"
+                className="w-full sm:w-auto justify-center text-black bg-transparent border-2 border-black transition-all duration-300 py-3.5 px-6 font-semibold"
               >
                 I'm looking for a job
               </Button>
@@ -79,7 +79,7 @@ const HeroSection: React.FC = () => {
                 href="/signUp" 
                 variant="outline" 
                 size="md" 
-                className="w-full sm:w-auto justify-center bg-white text-black hover:bg-black hover:text-white border-2 border-black transition-all duration-300 py-3.5 px-6 font-semibold"
+                className="w-full sm:w-auto justify-center bg-white text-black border-2 border-black transition-all duration-300 py-3.5 px-6 font-semibold"
               >
                 I'm hiring talent
               </Button>
