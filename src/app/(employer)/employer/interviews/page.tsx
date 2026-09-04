@@ -53,7 +53,9 @@ export default function InterviewsPage() {
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
 
+  // Async data fetcher
   async function refresh() {
+    // If there's no token, stop loading and exit
     if (!session?.accessToken) {
       setIsLoading(false);
       return;
@@ -61,27 +63,20 @@ export default function InterviewsPage() {
 
     setIsLoading(true);
     try {
+      // 1. Fetch Real Interviews
       const realInterviews = await interviewsApi.getAll(session.accessToken);
       setInterviews(realInterviews);
 
-      const queryParams = new URLSearchParams({ status: "SHORTLISTED" });
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
-
-      const applicantsRes = await fetch(`${baseUrl}/applicants?${queryParams.toString()}`, {
-        headers: { Authorization: `Bearer ${session.accessToken}` }
-      });
-
-      if (applicantsRes.ok) {
-        const rawApplicants = await applicantsRes.json();
-        const mappedCandidates = rawApplicants.map((a: any) => ({
-           id: a.id,
-           jobId: a.jobId,
-           name: (a.talentProfile?.firstName || "") + " " + (a.talentProfile?.lastName || ""),
-           role: a.job?.title || "Applicant",
-           status: a.status
-        }));
-        setCandidates(mappedCandidates);
-      }
+      // 2. Fetch Real Candidates using your API file
+      const allCandidates = await employerCandidatesApi.getAll(session.accessToken);
+      
+      // Filter for candidates that are ready to be interviewed
+      const shortlistedCandidates = allCandidates.filter(
+        (candidate) => candidate.status === "SHORTLISTED" || candidate.stage === "Screening"
+      );
+      
+      setCandidates(shortlistedCandidates);
+      
     } catch (err) {
       console.error("Failed to load interviews or candidates:", err);
     } finally {
@@ -109,7 +104,7 @@ export default function InterviewsPage() {
 
   async function handleScheduleSubmit() {
     if (!session?.accessToken || !selectedCandidateId || !scheduleDate || !scheduleTime) return;
-
+    
     const candidate = candidates.find((c) => c.id === selectedCandidateId);
     if (!candidate) return;
 
@@ -131,7 +126,7 @@ export default function InterviewsPage() {
       await interviewsApi.scheduleApplicationInterview(
         session.accessToken,
         candidate.jobId,
-        candidate.id,
+        candidate.id,  
         {
           scheduledAt,
           location: locationStr,
@@ -147,7 +142,7 @@ export default function InterviewsPage() {
       setPhoneNumber("");
       setInstructions("");
       await refresh();
-
+      
     } catch (err: any) {
       setError(err.message || "Something went wrong while scheduling.");
     } finally {
@@ -157,11 +152,15 @@ export default function InterviewsPage() {
 
   async function handleCancel(interviewId: string) {
     if (!session?.accessToken) return;
+  
     try {
-      await interviewsApi.setStatus(session.accessToken, interviewId, "cancelled");
-      await refresh();
+    // 1. Change 'setStatus' to 'cancel'
+    // 2. Remove the '"cancelled"' string argument
+      await interviewsApi.cancel(session.accessToken, interviewId);
+    
+      await refresh(); // Reload list after cancel
     } catch (err) {
-      alert("Failed to cancel interview");
+      alert("Failed to cancel interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 
@@ -183,7 +182,7 @@ export default function InterviewsPage() {
       setRescheduleId(null);
       await refresh();
     } catch (err) {
-      alert("Failed to reschedule");
+      alert("Failed to reschedule interview: " + (err instanceof Error ? err.message : String(err)));
     }
   }
 

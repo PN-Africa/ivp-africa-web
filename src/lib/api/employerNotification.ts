@@ -9,87 +9,95 @@ export interface EmployerNotification {
   read: boolean;
 }
 
-const PREFIX = "ivp_employer_notifications_";
-type Listener = () => void;
-const listeners = new Set<Listener>();
-
-function keyFor(email: string) {
-  return PREFIX + email.toLowerCase();
+interface BackendNotification {
+  id: string;
+  userId: string;
+  type: "APPLICATION" | "INTERVIEW" | "MESSAGE" | "SUBSCRIPTION" | string;
+  title: string;
+  description: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
-function readNotifications(email: string): EmployerNotification[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(keyFor(email)) ?? "[]");
-  } catch {
-    return [];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com";
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  // Reads access_token (snake_case) from LocalStorage
+  const token = typeof window !== "undefined" 
+    ? (localStorage.getItem("access_token") || localStorage.getItem("accessToken")) 
+    : null;
+
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint.slice(1) : endpoint;
+  
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/${cleanEndpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    console.error("Network connection error:", error);
+    throw new Error("Unable to reach the backend server. Please check network/backend status.");
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const errorMessage = errorData.message || errorData.error || response.statusText || "An error occurred";
+    throw new Error(`[HTTP ${response.status}] ${cleanEndpoint}: ${errorMessage}`);
+  }
+
+  return response.json();
 }
 
-function writeNotifications(email: string, notifications: EmployerNotification[]) {
-  localStorage.setItem(keyFor(email), JSON.stringify(notifications));
-  listeners.forEach((l) => l());
-}
-
-function seedNotifications(): EmployerNotification[] {
-  const now = Date.now();
-  return [
-    { id: crypto.randomUUID(), type: "application", title: "New Application Received", description: "Uchechi Nwosu applied for Backend Engineer (Node.js)", createdAt: new Date(now - 10 * 60_000).toISOString(), read: false },
-    { id: crypto.randomUUID(), type: "interview", title: "Interview Accepted", description: "Chinedu Okafor accepted the panel interview invitation.", createdAt: new Date(now - 1 * 3600_000).toISOString(), read: false },
-    { id: crypto.randomUUID(), type: "message", title: "New Message", description: "Amina Yusuf sent a message regarding the data analyst test.", createdAt: new Date(now - 4 * 3600_000).toISOString(), read: true },
-    { id: crypto.randomUUID(), type: "subscription", title: "Subscription Warning", description: "Your Professional plan renews in 7 days. Update card details if needed.", createdAt: new Date(now - 1 * 86400_000).toISOString(), read: true },
-  ];
+function transformNotification(item: BackendNotification): EmployerNotification {
+  return {
+    id: item.id,
+    type: (item.type?.toLowerCase() as EmployerNotificationType) || "application",
+    title: item.title,
+    description: item.description,
+    createdAt: item.createdAt,
+    read: item.isRead,
+  };
 }
 
 export const employerNotificationsApi = {
-  getAll(email: string): EmployerNotification[] {
-    const existing = readNotifications(email);
-    if (existing.length > 0) {
-      return existing.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  async getAll(): Promise<EmployerNotification[]> {
+    try {
+      const data: BackendNotification[] = await fetchWithAuth("notifications", {
+        method: "GET",
+      });
+      
+      if (!Array.isArray(data)) {
+        console.warn("Expected array for notifications, received:", data);
+        return [];
+      }
+      
+      return data.map(transformNotification);
+    } catch (error) {
+      console.error("Error fetching notifications list:", error);
+      return []; // Return empty array to prevent UI crashes
     }
-    const seeded = seedNotifications();
-    writeNotifications(email, seeded);
-    return seeded;
   },
 
-  unreadCount(email: string): number {
-    return readNotifications(email).filter((n) => !n.read).length;
+  async markAsRead(id: string): Promise<void> {
+    await fetchWithAuth(`notifications/${id}/read`, { method: "PATCH" });
   },
 
-  markAsRead(email: string, id: string) {
-    const notifications = readNotifications(email);
-    const updated = notifications.map((n) => (n.id === id ? { ...n, read: true } : n));
-    writeNotifications(email, updated);
+  async markAllAsRead(): Promise<void> {
+    await fetchWithAuth("notifications/read-all", { method: "PATCH" });
   },
 
-  markAllAsRead(email: string) {
-    const notifications = readNotifications(email);
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    writeNotifications(email, updated);
-  },
-
-  remove(email: string, id: string) {
-    const notifications = readNotifications(email);
-    writeNotifications(email, notifications.filter((n) => n.id !== id));
-  },
-
-  add(email: string, type: EmployerNotificationType, title: string, description: string) {
-    const notifications = readNotifications(email);
-    notifications.unshift({
-      id: crypto.randomUUID(),
-      type,
-      title,
-      description,
-      createdAt: new Date().toISOString(),
-      read: false,
-    });
-    writeNotifications(email, notifications);
-  },
-
-  subscribe(listener: Listener) {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
+  async remove(id: string): Promise<void> {
+    await fetchWithAuth(`notifications/${id}`, { method: "DELETE" });
   },
 };

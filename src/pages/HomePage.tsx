@@ -11,7 +11,7 @@ const backgroundImage = '/assets/bg1.jpg';
 const HomePage: React.FC = () => {
   return (
     <main 
-      className="bg-cover bg-center bg-no-repeat bg-fixed relative min-h-screen"
+      className="bg-cover bg-center bg-no-repeat bg-scroll md:bg-fixed relative min-h-screen w-full overflow-x-hidden flex flex-col"
       style={{ backgroundImage: `url(${backgroundImage})` }}
     >
       <HeroSection />

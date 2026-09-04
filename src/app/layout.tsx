@@ -23,7 +23,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "IVP Africa | Talent Placement Platform",
     description: "Connecting qualified talent with employers across Africa.",
-    url: "",
+    url: " ",
     type: "website",
     images: [
       {
@@ -38,6 +38,9 @@ export const metadata: Metadata = {
     title: "IVP Africa | Talent Placement Platform",
     description: "Connecting qualified talent with employers across Africa.",
     images: [""], // Add your Twitter image URL here
+  },
+  icons: {
+    icon: "/assets/logo6.png",
   },
 };
 
