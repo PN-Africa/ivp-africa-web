@@ -95,7 +95,7 @@ const AboutSection: React.FC = () => {
               <Button 
                 href="/about" 
                 variant="primary" 
-                className="w-full sm:w-auto bg-white text-black hover:bg-gray-50 border-2 border-black font-semibold px-6 sm:px-8 py-3 sm:py-3.5 rounded-lg transition-all duration-300 flex justify-center items-center"
+                className="w-full sm:w-auto bg-white text-black border-2 border-black font-semibold px-6 sm:px-8 py-3 sm:py-3.5 rounded-lg transition-all duration-300 flex justify-center items-center"
               >
                 Learn More About Us
               </Button>
