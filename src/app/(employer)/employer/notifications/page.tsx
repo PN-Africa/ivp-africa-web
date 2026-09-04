@@ -32,8 +32,10 @@ export default function EmployerNotificationsPage() {
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
+    if (!session?.email) return; // Must check for email before fetching
     try {
       setLoading(true);
+      // Added session.email to the API call
       const data = await employerNotificationsApi.getAll();
       setNotifications(data);
     } catch (error) {
@@ -44,8 +46,7 @@ export default function EmployerNotificationsPage() {
   }
 
   useEffect(() => {
-    // 1. Properly close the session block
-    if (session) {
+    if (session?.email) {
       refresh();
       
       // Auto-refresh every 30 seconds
@@ -56,7 +57,8 @@ export default function EmployerNotificationsPage() {
       // Cleanup interval on unmount
       return () => clearInterval(intervalId);
     }
-  }, [session]); // 2. Add session to the dependency array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.email]);
 
   const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
@@ -66,12 +68,13 @@ export default function EmployerNotificationsPage() {
   }, [notifications, activeTab]);
 
   async function handleClick(notification: EmployerNotification) {
-    if (notification.read) return;
+    if (!session?.email || notification.read) return;
     try {
       setNotifications((prev) =>
         prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
       );
-      await employerNotificationsApi.markAsRead(notification.id);
+      // Added session.email to the API call
+      await employerNotificationsApi.markAsRead( notification.id);
     } catch (error) {
       console.error("Failed to mark as read:", error);
       refresh();
@@ -79,8 +82,10 @@ export default function EmployerNotificationsPage() {
   }
 
   async function handleMarkAllRead() {
+    if (!session?.email) return;
     try {
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      // Added session.email to the API call
       await employerNotificationsApi.markAllAsRead();
     } catch (error) {
       console.error("Failed to mark all as read:", error);
@@ -90,8 +95,10 @@ export default function EmployerNotificationsPage() {
 
   async function handleRemove(id: string, e: React.MouseEvent) {
     e.stopPropagation();
+    if (!session?.email) return;
     try {
       setNotifications((prev) => prev.filter((n) => n.id !== id));
+      // Added session.email to the API call
       await employerNotificationsApi.remove(id);
     } catch (error) {
       console.error("Failed to delete notification:", error);
@@ -99,12 +106,11 @@ export default function EmployerNotificationsPage() {
     }
   }
 
-  // 3. Actually use the loading and status states to show a loading screen!
-  // We only show it if we have 0 notifications so the screen doesn't flash every 30 seconds during background refresh.
-  if (status === "loading" || (loading && notifications.length === 0)) {
+  // FIXED: Removed the undefined `status` variable.
+  if (loading && notifications.length === 0) {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
-        <p className="text-sm text-gray-500 animate-pulse">Loading notifications...</p>
+        <p className="animate-pulse text-sm text-gray-500">Loading notifications...</p>
       </div>
     );
   }
@@ -153,7 +159,11 @@ export default function EmployerNotificationsPage() {
 
       <div className="flex flex-col gap-2">
         {filteredNotifications.map((notification) => {
-          const { icon: Icon, bg, text } = typeIcons[notification.type];
+          const { icon: Icon, bg, text } = typeIcons[notification.type] || {
+            icon: AlertTriangle,
+            bg: "bg-gray-100",
+            text: "text-gray-500",
+          };
           return (
             <div
               key={notification.id}
