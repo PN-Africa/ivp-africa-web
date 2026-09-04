@@ -180,11 +180,18 @@ export default function InterviewsPage() {
   async function handleRescheduleSubmit() {
     if (!session?.accessToken || !rescheduleId || !newDate || !newTime) return;
     try {
+      // 1. Find the interview to extract its existing location
+      const interviewToReschedule = interviews.find((i) => i.id === rescheduleId);
+      const existingLocation = interviewToReschedule?.rawLocation || "";
+
+      // 2. Pass existingLocation as the 4th argument
       await interviewsApi.reschedule(
         session.accessToken,
         rescheduleId,
-        new Date(`${newDate}T${newTime}`).toISOString()
+        new Date(`${newDate}T${newTime}`).toISOString(),
+        existingLocation 
       );
+      
       setRescheduleId(null);
       await refresh(); // Reload list after reschedule
     } catch (err) {
