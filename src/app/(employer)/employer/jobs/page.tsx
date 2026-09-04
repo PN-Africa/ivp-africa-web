@@ -182,7 +182,7 @@ export default function EmployerJobsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredJobs.map((job: any, i) => {
+                {filteredJobs.map((job: EmployerJob, i) => {
                   const palette = avatarPalette[i % avatarPalette.length];
 
                   // 4. Extract the reliable Job ID
