@@ -186,7 +186,7 @@ export default function EmployerJobsPage() {
                   const palette = avatarPalette[i % avatarPalette.length];
 
                   // 4. Extract the reliable Job ID
-                  const actualJobId = job.id || job._id;
+                  const actualJobId = job.id;
 
                   // 5. Filter cleanly using the candidates API we imported
                   const displayApplicants = candidates.filter((c) => c.jobId === actualJobId).length;
