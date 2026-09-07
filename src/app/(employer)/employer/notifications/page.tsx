@@ -160,7 +160,7 @@ export default function EmployerNotificationsPage() {
       <div className="flex flex-col gap-2">
         {filteredNotifications.map((notification) => {
           const { icon: Icon, bg, text } = typeIcons[notification.type] || {
-            icon: AlertTriangle,
+            icon: MessageSquare,
             bg: "bg-gray-100",
             text: "text-gray-500",
           };
