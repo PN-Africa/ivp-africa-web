@@ -152,7 +152,7 @@ export function TopNavbar({ section, title, userName }: TopNavbarProps) {
                   type="button"
                   onClick={() => {
                     setMenuOpen(false);
-                    router.push("/talent/profile");
+                    router.push("/talent/Profile");
                   }}
                   className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                 >
