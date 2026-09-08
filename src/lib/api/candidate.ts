@@ -46,7 +46,8 @@ export interface JobApplicant {
   talentProfile: TalentProfile;
 }
 
-function mapApplicantToCandidate(applicant: JobApplicant): EmployerCandidate {
+// 1. Add jobTitle parameter to the mapper
+function mapApplicantToCandidate(applicant: any, fallbackJobId?: string, jobTitle?: string): EmployerCandidate {
   const statusMap: Record<string, PipelineStage> = {
     PENDING: "New",
     SHORTLISTED: "Screening",
@@ -55,15 +56,16 @@ function mapApplicantToCandidate(applicant: JobApplicant): EmployerCandidate {
   };
 
   return {
-    id: applicant.id,
-    jobId: applicant.jobId,
+    id: applicant.id || applicant._id, 
+    jobId: applicant.jobId || fallbackJobId || "", 
     status: applicant.status,
-    name: `${applicant.talentProfile.firstName} ${applicant.talentProfile.lastName}`,
-    role: applicant.talentProfile.headline || "Talent",
+    name: `${applicant.talentProfile?.firstName || "Unknown"} ${applicant.talentProfile?.lastName || ""}`.trim(),
+    // 2. Prioritize jobTitle over the talent headline
+    role: jobTitle || applicant.talentProfile?.headline || "Talent",
     stage: statusMap[applicant.status] || "New",
     appliedAt: applicant.appliedAt,
-    email: applicant.talentProfile.user.email,
-    skills: applicant.talentProfile.skills || [],
+    email: applicant.talentProfile?.user?.email || "",
+    skills: applicant.talentProfile?.skills || [],
     location: "Remote",
     matchPercentage: Math.floor(Math.random() * 41) + 60,
     about: "No bio provided.",
@@ -83,22 +85,13 @@ const STAGE_TO_BACKEND_STATUS: Record<PipelineStage, string> = {
   Rejected: "REJECTED",
 };
 
-const BACKEND_STATUS_TO_STAGE: Record<string, PipelineStage> = {
-  PENDING: "New",
-  SHORTLISTED: "Screening",
-  ACCEPTED: "Hired",
-  REJECTED: "Rejected",
-};
-
 export const employerCandidatesApi = {
-  // 1. Fetch all jobs, then fetch applicants for those jobs
   async getAll(token: string): Promise<EmployerCandidate[]> {
     if (typeof window === "undefined") return [];
     
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com"; 
       
-      // Step A: Get the employer's jobs using the route from your controller
       const jobsRes = await fetch(`${baseUrl}/api/v1/jobs/my-postings`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -109,12 +102,13 @@ export const employerCandidatesApi = {
       if (!jobsRes.ok) throw new Error(`Failed to fetch jobs: ${jobsRes.status}`);
       const jobs = await jobsRes.json();
 
-      // Step B: Fetch applicants for every job concurrently
-      const applicantsPromises = jobs.map((job: { id: string }) => 
-        this.getApplicantsForJob(job.id, token)
-      );
+      const applicantsPromises = jobs.map((job: any) => {
+        const actualJobId = job.id || job._id; 
+        // 3. Extract title from the job object (fallback gracefully if keys differ)
+        const title = job.title || job.position || job.name; 
+        return this.getApplicantsForJob(actualJobId, token, undefined, undefined, title);
+      });
       
-      // Resolve all promises and flatten the array of arrays into a single list
       const applicantsArrays = await Promise.all(applicantsPromises);
       return applicantsArrays.flat();
 
@@ -124,14 +118,14 @@ export const employerCandidatesApi = {
     }
   },
 
-  async getApplicantsForJob(jobId: string, token: string, status?: string, skill?: string): Promise<EmployerCandidate[]> {
+  // 4. Accept jobTitle as a parameter and pass it into the mapper
+  async getApplicantsForJob(jobId: string, token: string, status?: string, skill?: string, jobTitle?: string): Promise<EmployerCandidate[]> {
     const query = new URLSearchParams();
     if (status) query.append("status", status);
     if (skill) query.append("skill", skill);
 
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://ivp-backend.onrender.com"; 
     
-    // Correct URL matching @Get(':id/applicants')
     const res = await fetch(`${baseUrl}/api/v1/jobs/${jobId}/applicants?${query.toString()}`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -141,8 +135,8 @@ export const employerCandidatesApi = {
 
     if (!res.ok) throw new Error(`Failed to fetch applicants for job ${jobId}: ${res.status}`);
 
-    const data: JobApplicant[] = await res.json();
-    return data.map(mapApplicantToCandidate);
+    const data = await res.json();
+    return data.map((app: any) => mapApplicantToCandidate(app, jobId, jobTitle));
   },
 
   async getById(applicantId: string, token: string): Promise<EmployerCandidate | null> {
@@ -150,9 +144,8 @@ export const employerCandidatesApi = {
     return candidates.find((c) => c.id === applicantId) ?? null;
   },
 
-  // 2. Fix the update route to include jobId as required by your controller
   async setStage(
-    jobId: string,           // <-- ADDED jobId parameter
+    jobId: string,          
     applicationId: string,
     stage: PipelineStage,
     token: string

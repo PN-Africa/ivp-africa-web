@@ -195,45 +195,46 @@ export default function SubscriptionPage() {
           </div>
 
           <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
-            <h2 className="text-sm font-bold text-gray-900 sm:text-base">Payment History</h2>
-            <div className="mt-3 flex flex-col divide-y divide-gray-100">
-              {paymentHistory.length === 0 ? (
-                <p className="text-sm text-gray-500 py-3">No payment history found.</p>
-              ) : (
-                paymentHistory.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-900">
-                        {payment.plan?.name || "Subscription"} Plan
-                      </p>
-                      <p className="text-xs text-gray-400">{formatDate(payment.createdAt)} • Ref: {payment.reference}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <span className="text-sm font-semibold text-gray-900">${Number(payment.amount).toFixed(2)}</span>
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                          payment.status === "SUCCESS" ? "bg-green-50 text-green-700" : 
-                          payment.status === "PENDING" ? "bg-yellow-50 text-yellow-700" : "bg-red-50 text-red-600"
-                        }`}
-                      >
-                        {payment.status === "SUCCESS" ? "Success" : payment.status === "PENDING" ? "Pending" : "Failed"}
-                      </span>
-                      <button
-  type="button"
-  onClick={() => {
-    generateInvoicePdf(payment, session?.displayName ?? "Company");
-  }}
-  className="text-xs font-medium text-[#8A38F5] hover:underline"
->
-  Download PDF
-</button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+  <h2 className="text-sm font-bold text-gray-900 sm:text-base">Payment History</h2>
+  
+  {/* Scrollable Container */}
+  <div className="mt-3 flex flex-col divide-y divide-gray-100 max-h-[320px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+    {paymentHistory.length === 0 ? (
+      <p className="text-sm text-gray-500 py-3">No payment history found.</p>
+    ) : (
+      paymentHistory.map((payment) => (
+        <div key={payment.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-gray-900">
+              {payment.plan?.name || "Subscription"} Plan
+            </p>
+            <p className="text-xs text-gray-400">{formatDate(payment.createdAt)} • Ref: {payment.reference}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="text-sm font-semibold text-gray-900">${Number(payment.amount).toFixed(2)}</span>
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                payment.status === "SUCCESS" ? "bg-green-50 text-green-700" : 
+                payment.status === "PENDING" ? "bg-yellow-50 text-yellow-700" : "bg-red-50 text-red-600"
+              }`}
+            >
+              {payment.status === "SUCCESS" ? "Success" : payment.status === "PENDING" ? "Pending" : "Failed"}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                generateInvoicePdf(payment, session?.displayName ?? "Company");
+              }}
+              className="text-xs font-medium text-[#8A38F5] hover:underline"
+            >
+              Download PDF
+            </button>
           </div>
         </div>
+      ))
+    )}
+  </div>
+</div>        </div>
 
         {/* Available Plans */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
