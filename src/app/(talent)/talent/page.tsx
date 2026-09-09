@@ -18,11 +18,11 @@ import { getProfileCompletion, type ChecklistItem } from "@/lib/utils/profileCom
 import { getRecommendedJobs } from "@/lib/utils/recommendations";
 import { getLatestUpdates, type UpdateItem } from "@/lib/utils/dashboardUpdates";
 import type { ApplicationRecord } from "@/lib/types/application";
-import { talentJobsApi, type TalentJob } from "@/lib/utils/talentJobs";
+import {  type TalentJob } from "@/lib/utils/talentJobs";
 import { profileCompletionApi } from "@/lib/api/profileCompletion";
-
-
-
+import { applicationsApi_Real } from "@/lib/api/applications";
+import type { RealApplication } from "@/lib/types/application";
+import { talentInterviewsApi } from "@/lib/api/talentInterview";
 const statusStyles: Record<ApplicationRecord["status"], string> = {
   shortlisted: "bg-[#EDE7F8] text-[#8A38F5]",
   interview: "bg-amber-50 text-[#B77A1E]",
@@ -42,7 +42,7 @@ const statusLabels: Record<ApplicationRecord["status"], string> = {
 function TalentDashboard() {
   const { session } = useSession();
 
-  const [applications, setApplications] = useState<ApplicationRecord[]>([]);
+  const [applications, setApplications] = useState<RealApplication[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [completionPercentage, setCompletionPercentage] = useState(0);
@@ -50,16 +50,33 @@ function TalentDashboard() {
  
   const [updates, setUpdates] = useState<UpdateItem[]>([]);
   const [recommendedJobs, setRecommendedJobs] = useState<TalentJob[]>([]);
-
-
+  const [interviewCount, setInterviewCount] = useState(0);
+function mapApplicationStatus(status: string): ApplicationRecord["status"] {
+  const upper = status.toUpperCase();
+  if (upper === "PENDING") return "applied";
+  if (upper === "SHORTLISTED") return "shortlisted";
+  if (upper === "INTERVIEW" || upper === "INTERVIEWING") return "interview";
+  if (upper === "REJECTED") return "rejected";
+  if (upper === "HIRED" || upper === "ACCEPTED") return "hired";
+  return "applied";
+}
 useEffect(() => {
   if (!session?.email) return;
   const email = session.email;
 
   async function loadDashboard() {
-    setApplications(applicationsApi.getAll(email));
+    const appsResult = await applicationsApi_Real.getApplication();
+    if (appsResult.ok) {
+      setApplications(appsResult.applications);
+    }
+    const interviewsResult = await talentInterviewsApi.getAll();
+  if (interviewsResult.ok) {
+    setInterviewCount(interviewsResult.interviews.filter((i) => i.status === "upcoming").length);
+  }
+    // Known gap: no GET /jobs/saved endpoint exists yet, so this stays local-only.
     setSavedCount(savedJobsApi.getAll(email).length);
 
+    // Known gap: no GET /talent/profile endpoint exists yet, so this stays local-only.
     const profile = profileApi.get(email);
     const { checklist: items } = getProfileCompletion(profile);
     setChecklist(items);
@@ -78,8 +95,7 @@ useEffect(() => {
   loadDashboard();
 }, [session?.email]);
 
-  const shortlistedCount = applications.filter((a) => a.status === "shortlisted").length;
-  const interviewCount = applications.filter((a) => a.status === "interview").length;
+  const shortlistedCount = applications.filter((a) => mapApplicationStatus(a.status) === "shortlisted").length;
   const recentApplications = applications.slice(0, 4);
 
   return (
@@ -165,26 +181,29 @@ useEffect(() => {
               </p>
             ) : (
               <div className="flex flex-col gap-2">
-                {recentApplications.map((app) => (
-                  <div
-                    key={app.id}
-                    className="flex cursor-pointer items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 transition-colors duration-150 hover:bg-[#EDE7F8] sm:px-4 sm:py-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-gray-900 sm:text-sm">
-                        {app.jobTitle}
-                      </p>
-                      <p className="mt-0.5 truncate text-[11px] text-gray-500 sm:text-xs">
-                        {app.company} · {app.location}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap sm:px-3 sm:text-xs ${statusStyles[app.status]}`}
-                    >
-                      {statusLabels[app.status]}
-                    </span>
-                  </div>
-                ))}
+                {recentApplications.map((app) => {
+  const displayStatus = mapApplicationStatus(app.status);
+  return (
+    <div
+      key={app.id}
+      className="flex cursor-pointer items-center justify-between rounded-xl bg-gray-50 px-3 py-2.5 transition-colors duration-150 hover:bg-[#EDE7F8] sm:px-4 sm:py-3"
+    >
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-gray-900 sm:text-sm">
+          {app.jobTitle}
+        </p>
+        <p className="mt-0.5 truncate text-[11px] text-gray-500 sm:text-xs">
+          {app.company} · {app.location}
+        </p>
+      </div>
+      <span
+        className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap sm:px-3 sm:text-xs ${statusStyles[displayStatus]}`}
+      >
+        {statusLabels[displayStatus]}
+      </span>
+    </div>
+  );
+})}
               </div>
             )}
           </div>

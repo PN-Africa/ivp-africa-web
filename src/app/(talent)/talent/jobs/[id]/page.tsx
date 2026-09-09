@@ -151,7 +151,7 @@ async function handleConfirmApply() {
             Your profile is {completion.profilePercent}% complete. Fill in every required field to unlock applying.
           </p>
           <Link
-            href="/talent/profile"
+            href="/talent/Profile"
             className="mt-3 inline-block rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700"
           >
             Complete profile
