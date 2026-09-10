@@ -7,7 +7,6 @@ import { ArrowLeft, Check, FileText, AlertCircle, MessageCircle } from "lucide-r
 import { talentJobsApi, type TalentJob } from "@/lib/utils/talentJobs";
 import { useSession } from "@/lib/auth/useSession";
 import { jobsApi } from "@/lib/api/jobs";import { profileApi } from "@/lib/api/profile";
-import { messageApi_Real } from "@/lib/api/message";
 import { applicationsApi_Real } from "@/lib/api/applications";
 import { profileCompletionApi } from "@/lib/api/profileCompletion";
 const statusBadgeStyles: Record<"filled" | "flagged", string> = {
