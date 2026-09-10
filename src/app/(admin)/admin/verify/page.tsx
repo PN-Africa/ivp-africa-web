@@ -10,7 +10,7 @@ export default function AdminVerifyPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get("token");
+    const token = searchParams?.get("token");
 
     if (!token) {
       setError("No token provided in verification link.");
