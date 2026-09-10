@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { adminAuthApi } from "@/lib/api/adminAuth";
 import { session } from "@/lib/auth/session";
-import { profileApi } from "@/lib/api/profile";
 
 function AdminVerifyContent() {
   const searchParams = useSearchParams();
@@ -33,14 +32,35 @@ function AdminVerifyContent() {
         return;
       }
 
-      // We don't yet know the real response shape — logging above will tell us.
-      // Once confirmed, this is where we'll call session.set(...) with the
-      // real accessToken/user fields and router.push to the dashboard.
+      const { access_token, user } = result.data;
+
+      if (!access_token) {
+        setStatus("error");
+        setErrorMessage("Authentication failed: No access token received.");
+        return;
+      }
+
+      // 1. Store token in localStorage for httpClient/apiFetch requests
+      if (typeof window !== "undefined") {
+        localStorage.setItem("admin_token", access_token);
+      }
+
+      // 2. Set the session context if your session helper supports it
+      if (typeof session?.set === "function") {
+        session.set({
+          token: access_token,
+          user: user,
+        });
+      }
+
       setStatus("success");
+
+      // 3. Immediately redirect to the Admin Dashboard
+      router.push("/adminLogin/admin");
     }
 
     verify();
-  }, [token]);
+  }, [token, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
@@ -60,11 +80,8 @@ function AdminVerifyContent() {
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-50">
               <ShieldCheck size={20} className="text-green-600" />
             </div>
-            <h1 className="mt-4 text-xl font-bold text-gray-900">Login verified</h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Check the browser console — we still need to confirm the response shape before
-              completing sign-in.
-            </p>
+            <h1 className="mt-4 text-xl font-bold text-gray-900">Verified! Redirecting…</h1>
+            <p className="mt-2 text-sm text-gray-500">Taking you to your dashboard.</p>
           </>
         )}
 
@@ -74,8 +91,8 @@ function AdminVerifyContent() {
             <p className="mt-2 text-sm text-gray-500">{errorMessage}</p>
             <button
               type="button"
-              onClick={() => router.push("/admin-login")}
-              className="mt-4 text-sm font-medium text-[#8A38F5] hover:underline"
+              onClick={() => router.push("/adminLogin")}
+              className="mt-4 rounded-xl bg-[#8A38F5] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#6C3CFF]"
             >
               Back to admin login
             </button>
