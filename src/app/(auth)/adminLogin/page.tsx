@@ -79,7 +79,7 @@ export default function AdminLoginPage() {
             <>
               <h1 className="text-2xl font-bold text-gray-900">Welcome back, Admin</h1>
               <p className="mt-1 text-sm text-gray-500">
-                Sign in to access your secure administrative dashboard.
+                Sign in to access your secure the administrative dashboard.
               </p>
 
               {error && (
