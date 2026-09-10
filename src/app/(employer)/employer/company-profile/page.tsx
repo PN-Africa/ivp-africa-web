@@ -20,18 +20,6 @@ function getInitial(name: string) {
  * Safely extracts total applicant count from various API payload structures
  * (Prisma _count object, arrays, direct numbers, or custom property keys).
  */
-function getApplicantCount(job: any): number {
-  if (!job) return 0;
-  if (typeof job._count?.applications === "number") return job._count.applications;
-  if (typeof job._count?.applicants === "number") return job._count.applicants;
-  if (typeof job.applicantsCount === "number") return job.applicantsCount;
-  if (typeof job.applicationsCount === "number") return job.applicationsCount;
-  if (Array.isArray(job.applicants)) return job.applicants.length;
-  if (Array.isArray(job.applications)) return job.applications.length;
-  if (typeof job.applicants === "number") return job.applicants;
-  if (typeof job.applications === "number") return job.applications;
-  return 0;
-}
 
 const statusStyles: Record<string, string> = {
   active: "text-green-600",
@@ -318,7 +306,6 @@ export default function CompanyProfilePage() {
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {activeJobs.map((job) => {
-                  const count = getApplicantCount(job);
                   return (
                     <Link
                       key={job.id}
@@ -330,9 +317,6 @@ export default function CompanyProfilePage() {
                         {job.location} · {job.workMode}
                       </p>
                       <div className="mt-3 flex items-center justify-between">
-                        <span className="rounded-full bg-[#EDE7F8] px-2.5 py-1 text-[11px] font-medium text-[#8A38F5]">
-                          {count} {count === 1 ? "Applicant" : "Applicants"}
-                        </span>
                         <span className={`text-xs font-semibold ${statusStyles[job.status] || "text-gray-500"}`}>
                           {statusLabels[job.status] || job.status}
                         </span>
