@@ -48,8 +48,11 @@ function AdminVerifyContent() {
       // 2. Set the session context if your session helper supports it
       if (typeof session?.set === "function") {
         session.set({
-          token: access_token,
-          user: user,
+          id: user.id,
+          email: user.email,
+          role: user.role || "ADMIN",
+          displayName: user.firstName || user.name || "Admin", 
+          accessToken: access_token, 
         });
       }
 
