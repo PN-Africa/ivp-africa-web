@@ -104,8 +104,9 @@ const existingProfile = profileApi.get(result.user.email);
   }
 
   return (
-    <div className="bg-[#EDE7F8] sm:h-screen flex w-full flex-col items-center justify-center px-4 py-8 sm:px-8 lg:ml-[45%] lg:min-h-screen lg:py-12 xl:ml-[50%]">
+    <div className="flex w-full flex-col h-screen items-center justify-center bg-[#EDE7F8] px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:ml-[45%]  lg:py-12 xl:ml-1/2">
       {/* Floating card */}
+      
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl lg:p-10">
         {/* Heading — centered */}
         <h1 className="text-center text-3xl font-bold text-[#3A2680]">Welcome Back</h1>

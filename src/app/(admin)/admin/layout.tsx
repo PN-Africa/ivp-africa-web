@@ -7,7 +7,7 @@ import { AdminTopbar } from "../admin/components/AdminNavbar";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireRole role="admin">
-      <div className="flex bg-gray-50">
+      <div className="flex bg-gray-50 h-screen">
         <AdminSidebar />
         <div className="flex flex-1 flex-col">
           <AdminTopbar />

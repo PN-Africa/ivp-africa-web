@@ -11,7 +11,7 @@ import {
   Bell,
   Settings,
   MessageSquare,
-  LogOut,
+  LogOut,Calendar
 } from "lucide-react";
 
 import { navItems } from "../data/data";
@@ -22,6 +22,7 @@ const icons: Record<string, React.ElementType> = {
   "/talent/Profile": User,
   "/talent/applications": FileText,
   "/talent/jobs": Bookmark,
+  "/talent/interview": Calendar,
   "/talent/notifications": Bell,
   "/talent/messages": MessageSquare,
   "/talent/settings": Settings,
