@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { manrope, plusJakartaSans } from "@/app/font";
-import { realAuthApi} from "@/lib/api/client";
+import { api, realAuthApi } from "@/lib/api/client";
 import { useSession } from "@/lib/auth/useSession";
 import { session as sessionStore } from "@/lib/auth/session";
 
@@ -52,7 +52,7 @@ export default function SettingsPage() {
     if (!session?.email) return;
 
     setDeleting(true);
-    await realAuthApi.deleteAccount(session.email);
+    await api.auth.deleteAccount(session.email);
     sessionStore.clear();
     router.push("/login");
   }
