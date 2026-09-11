@@ -71,12 +71,12 @@ const inputClass =
   "w-full rounded-xl border border-gray-100 bg-white py-2.5 sm:py-3 md:py-3.5 pr-4 pl-11 text-sm text-black placeholder-gray-400 transition focus:outline-none focus:ring-2 focus:ring-[#8A38F5]";
 const iconClass = "pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-[#8A38F5]";
 
-type Step = "form" | "verify";
+
 
 export default function SignUpFormSection() {
   const router = useRouter();
   const [role, setRole] = useState<"talent" | "employer">("talent");
-  const [step, setStep] = useState<Step>("form");
+
 
   const [candidateData, setCandidateData] = useState<CandidateFormData>(initialCandidateData);
   const [employerData, setEmployerData] = useState<EmployerFormData>(initialEmployerData);
@@ -86,14 +86,6 @@ export default function SignUpFormSection() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [otp, setOtp] = useState("");
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [resendMessage, setResendMessage] = useState<string | null>(null);
-
-  const [pendingEmail, setPendingEmail] = useState("");
-  const [pendingRedirect, setPendingRedirect] = useState("/talent");
 
   function validateCandidate(): FormErrors {
     const errors: FormErrors = {};
@@ -149,15 +141,13 @@ export default function SignUpFormSection() {
     });
     console.log("Candidate registration result:", result);
     setLoading(false);
-
+    console.log("Password:", candidateData.password);
+console.log("Password valid:", PASSWORD_RULE.test(candidateData.password));
     if (!result.ok) {
       setError({ submit: result.message });
       return;
     }
-
-    setPendingEmail(candidateData.email.trim());
-    setPendingRedirect("/talent");
-    setStep("verify");
+        router.push("/login");
   }
 
   async function handleEmployerSignUp(e: FormEvent) {
@@ -183,126 +173,11 @@ export default function SignUpFormSection() {
       setError({ submit: result.message });
       return;
     }
-
-    setPendingEmail(employerData.businessEmail.trim());
-    setPendingRedirect("/employer");
-    setStep("verify");
+        router.push("/login");
   }
 
-  // async function handleVerify(e: FormEvent) {
-  //   e.preventDefault();
-  //   setOtpError(null);
-
-  //   if (otp.trim().length !== 6) {
-  //     setOtpError("Enter the full 6-digit code.");
-  //     return;
-  //   }
-
-  //   setVerifying(true);
-  //   const result = await realAuthApi.verifyEmail(pendingEmail);
-  //   setVerifying(false);
-
-  //   if (!result.ok) {
-  //     setOtpError("Incorrect code. Please try again.");
-  //     return;
-  //   }
-
-  //   const existingProfile = profileApi.get(pendingEmail);
-  //   const displayName =
-  //     role === "talent"
-  //       ? `${candidateData.firstName.trim()} ${candidateData.lastName.trim()}`
-  //       : employerData.companyName.trim();
-
-  //   session.set({
-  //     id: 
-  //     email: pendingEmail,
-  //     role,
-  //     displayName,
-  //     redirectPath: result.redirectPath || pendingRedirect,
-  //     avatarUrl: existingProfile?.personalInfo?.avatarUrl,
-  //   });
-
-  //   router.push(result.redirectPath || pendingRedirect);
-  // }
-
-  // async function handleResend() {
-  //   setResending(true);
-  //   setResendMessage(null);
-  //   await api.auth.resendOtp(pendingEmail);
-  //   setResending(false);
-  //   setResendMessage("A new code has been sent.");
-  // }
-
-  // ── Step 2: verify email (shared by both roles) ──
-  if (step === "verify") {
-    return (
-      <div className="flex w-full flex-col items-center justify-center bg-[#EDE7F8] px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:ml-[45%] lg:min-h-screen lg:py-12 xl:ml-1/2">
-        <div className="w-full max-w-sm rounded-2xl bg-white p-5 text-center shadow-xl sm:max-w-md sm:rounded-3xl sm:p-8 md:p-9 lg:p-10">
-          <h1 className="text-lg font-bold text-[#3A2680] sm:text-xl md:text-2xl">Verify your email</h1>
-          <p className="mt-2 text-xs text-[#6b5a94] sm:text-sm">
-            We sent a verification code to{" "}
-            <span className="font-medium text-[#3A2680] break-all">{pendingEmail}</span>
-          </p>
-
-          <p className="mt-3 rounded-lg bg-[#EDE7F8] px-3 py-2 text-xs text-[#6b5a94]">
-            Demo mode: use code <span className="font-mono font-semibold">123456</span>
-          </p>
-{/* 
-          <form onSubmit={handleVerify} className="mt-5 sm:mt-6">
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="000000"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-              className="w-full rounded-xl border border-gray-200 py-2.5 text-center text-base font-semibold tracking-[0.3em] text-black focus:outline-none focus:ring-2 focus:ring-[#8A38F5] sm:py-3.5 sm:text-lg sm:tracking-[0.5em]"
-            />
-            {otpError && <p className="mt-2 text-xs text-red-500">{otpError}</p>}
-
-            <button
-              type="submit"
-              disabled={verifying}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#5A31C3] py-2.5 text-sm font-semibold text-white
-                         transition-all duration-150 hover:bg-[#4a2699] active:scale-[0.98]
-                         disabled:cursor-not-allowed disabled:opacity-50 sm:mt-6 sm:py-3.5 sm:text-base"
-            >
-              {verifying ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Verifying…
-                </>
-              ) : (
-                "Verify email"
-              )}
-            </button>
-          </form> */}
-{/* 
-          <div className="mt-4 text-xs text-gray-500 sm:mt-5 sm:text-sm">
-            {resendMessage ? (
-              <p className="text-[#3A2680]">{resendMessage}</p>
-            ) : (
-              <>
-                Didn&apos;t get a code?{" "}
-                <button
-                  type="button"
-                  onClick={handleResend}
-                  disabled={resending}
-                  className="font-semibold text-[#8A38F5] hover:underline disabled:opacity-50"
-                >
-                  {resending ? "Sending…" : "Resend code"}
-                </button>
-              </>
-            )}
-          </div> */}
-        </div>
-      </div>
-    );
-  }
-
-  // ── Step 1: sign-up form ──
   return (
-    <div className="flex w-full flex-col h-screen items-center justify-center bg-[#EDE7F8] px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:ml-[45%] md:min-h-screen lg:py-12 xl:ml-1/2">
+    <div className="flex w-full flex-col h-screen items-center justify-center bg-[#EDE7F8] px-4 py-6 sm:px-6 sm:py-8 md:px-8 lg:ml-[45%]  lg:py-12 xl:ml-1/2">
       
       {/* Mobile-only heading, hidden once the desktop branding panel takes over */}
       <div className="flex flex-col items-center gap-2 bg-[#EDE7F8] pb-2 mb-3 lg:hidden">
