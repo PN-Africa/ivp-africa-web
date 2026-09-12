@@ -96,7 +96,7 @@ if (usersResult.ok) {
 
   return (
     <>
-      <div className="mb-6 bg-gray-50 h-screen">
+      <div className="mb-6 !bg-gray-50 h-screen">
         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
           Welcome back, {session?.displayName ?? "Admin"}
         </h1>

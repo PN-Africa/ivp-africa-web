@@ -31,42 +31,42 @@ function getInitials(name: string) {
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState<AdminUserView[]>([]);
-  const [loading, setLoading] =useState(true)
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All types");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-  async function loadUsers() {
-    setLoading(true);
-    const result = await adminUsersApi.getAll();
+    async function loadUsers() {
+      setLoading(true);
+      const result = await adminUsersApi.getAll();
 
-    if (!result.ok) {
-      console.error("Failed to load users:", result.message);
+      if (!result.ok) {
+        console.error("Failed to load users:", result.message);
+        setLoading(false);
+        return;
+      }
+
+      setUsers(result.users);
       setLoading(false);
-      return;
     }
 
-    setUsers(result.users);
-    setLoading(false);
-  }
+    loadUsers();
+  }, []);
 
-  loadUsers();
-}, []);
+  const filteredUsers = useMemo(() => {
+    return users
+      .filter((user) => user.role !== "admin") // exclude admin accounts from this list entirely
+      .filter((user) => {
+        const matchesSearch =
+          search.trim() === "" ||
+          user.displayName.toLowerCase().includes(search.toLowerCase()) ||
+          user.email.toLowerCase().includes(search.toLowerCase());
+        const matchesType = typeFilter === "All types" || roleLabels[user.role] === typeFilter;
+        return matchesSearch && matchesType;
+      });
+  }, [users, search, typeFilter]);
 
-
- const filteredUsers = useMemo(() => {
-  return users
-    .filter((user) => user.role !== "admin") // exclude admin accounts from this list entirely
-    .filter((user) => {
-      const matchesSearch =
-        search.trim() === "" ||
-        user.displayName.toLowerCase().includes(search.toLowerCase()) ||
-        user.email.toLowerCase().includes(search.toLowerCase());
-      const matchesType = typeFilter === "All types" || roleLabels[user.role] === typeFilter;
-      return matchesSearch && matchesType;
-    });
-}, [users, search, typeFilter]);
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paginatedUsers = filteredUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -119,7 +119,7 @@ export default function UserManagementPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-        <div className="overflow-x-auto">
+        <div className="max-h-[600px] overflow-y-auto overflow-x-auto">
           <table className="w-full min-w-[640px] text-left">
             <thead>
               <tr className="border-b border-gray-100">
@@ -132,68 +132,57 @@ export default function UserManagementPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-    <tr>
-      <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
-        Loading users...
-      </td>
-    </tr>
-  ) : (
-    <>
-      {paginatedUsers.map((user) => (
-        <tr key={user.email} className="transition-colors hover:bg-gray-50">
-          {/* ...unchanged row content... */}
-        </tr>
-      ))}
-
-      {paginatedUsers.length === 0 && (
-        <tr>
-          <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
-            No users match your search or filter.
-          </td>
-        </tr>
-      )}
-    </>
-  )}
-              {paginatedUsers.map((user) => (
-                <tr key={user.email} className="transition-colors hover:bg-gray-50">
-                  <td className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#EDE7F8] text-xs font-semibold text-[#8A38F5]">
-                        {user.avatarUrl ? (
-                          <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
-                        ) : (
-                          getInitials(user.displayName)
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-900">{user.displayName}</p>
-                        <p className="text-xs text-gray-400 sm:hidden">{roleLabels[user.role]}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="hidden px-4 py-4 text-sm text-gray-600 sm:table-cell sm:px-6">
-                    {roleLabels[user.role]}
-                  </td>
-                  <td className="px-4 py-4 sm:px-6">
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${statusStyles[user.status]}`}>
-                      {statusLabels[user.status]}
-                    </span>
-                  </td>
-                  <td className="hidden px-4 py-4 text-sm text-gray-500 md:table-cell sm:px-6">
-                    {user.verification}
-                  </td>
-                  <td className="px-4 py-4 text-right sm:px-6">
-                    <Link
-                      href={`/admin/users/${user.id}`}
-                      className="inline-block rounded-lg border border-[#8A38F5] px-3 py-1.5 text-xs font-semibold text-[#8A38F5] transition-colors hover:bg-[#8A38F5] hover:text-white sm:px-4"
-                    >
-                      View profile
-                    </Link>
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
+                    Loading users...
                   </td>
                 </tr>
-              ))}
-
-              
+              ) : paginatedUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400">
+                    No users match your search or filter.
+                  </td>
+                </tr>
+              ) : (
+                paginatedUsers.map((user) => (
+                  <tr key={user.email} className="transition-colors hover:bg-gray-50">
+                    <td className="px-4 py-4 sm:px-6">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#EDE7F8] text-xs font-semibold text-[#8A38F5]">
+                          {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+                          ) : (
+                            getInitials(user.displayName)
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900">{user.displayName}</p>
+                          <p className="text-xs text-gray-400 sm:hidden">{roleLabels[user.role]}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="hidden px-4 py-4 text-sm text-gray-600 sm:table-cell sm:px-6">
+                      {roleLabels[user.role]}
+                    </td>
+                    <td className="px-4 py-4 sm:px-6">
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${statusStyles[user.status]}`}>
+                        {statusLabels[user.status]}
+                      </span>
+                    </td>
+                    <td className="hidden px-4 py-4 text-sm text-gray-500 md:table-cell sm:px-6">
+                      {user.verification}
+                    </td>
+                    <td className="px-4 py-4 text-right sm:px-6">
+                      <Link
+                        href={`/admin/users/${user.id}`}
+                        className="inline-block rounded-lg border border-[#8A38F5] px-3 py-1.5 text-xs font-semibold text-[#8A38F5] transition-colors hover:bg-[#8A38F5] hover:text-white sm:px-4"
+                      >
+                        View profile
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
