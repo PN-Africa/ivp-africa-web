@@ -2,139 +2,46 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Eye, EyeOff } from "lucide-react";
 import { manrope, plusJakartaSans } from "@/app/font";
-import { api } from "@/lib/api/client";
+import { api, realAuthApi } from "@/lib/api/client";
 import { useSession } from "@/lib/auth/useSession";
 import { session as sessionStore } from "@/lib/auth/session";
-import { settingsApi } from "@/lib/api/settings";
 
-const inputStyles = `w-full rounded-xl border border-gray-200 px-4 py-3 pr-11 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-[#8A38F5] ${plusJakartaSans.className}`;
 
-function PasswordInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  const [visible, setVisible] = useState(false);
 
-  return (
-    <div className="relative">
-      <input
-        type={visible ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={inputStyles}
-      />
-      <button
-        type="button"
-        onClick={() => setVisible((prev) => !prev)}
-        aria-label={visible ? "Hide password" : "Show password"}
-        className="absolute top-1/2 right-3.5 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
-      >
-        {visible ? <EyeOff size={18} /> : <Eye size={18} />}
-      </button>
-    </div>
-  );
-}
-
-function PreferenceCheckbox({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onChange}
-      aria-pressed={checked}
-      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
-        checked ? "bg-[#8A38F5]" : "border border-gray-300 bg-white"
-      }`}
-    >
-      {checked && <Check size={15} strokeWidth={3} className="text-white" />}
-    </button>
-  );
-}
 
 export default function SettingsPage() {
   const { session } = useSession();
   const router = useRouter();
 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [passwordStatus, setPasswordStatus] = useState<"idle" | "saving" | "success">("idle");
+  
+  const [passwordStatus, setPasswordStatus] = useState<"idle" | "sending" | "success">("idle");
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  const [emailApplicationUpdates, setEmailApplicationUpdates] = useState(true);
-  const [emailJobMatches, setEmailJobMatches] = useState(true);
-
+  
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // load saved preferences once we know who's logged in
   useEffect(() => {
     if (!session?.email) return;
-    const prefs = settingsApi.getPreferences(session.email);
-    setEmailApplicationUpdates(prefs.emailApplicationUpdates);
-    setEmailJobMatches(prefs.emailJobMatches);
   }, [session?.email]);
 
-  async function handleUpdatePassword() {
+  async function handleRequestPasswordReset() {
     if (!session?.email) return;
     setPasswordError(null);
-
-    if (!currentPassword || !newPassword) {
-      setPasswordError("Please fill in both fields.");
-      return;
-    }
-
-    setPasswordStatus("saving");
-    const result = await api.auth.changePassword(session.email, currentPassword, newPassword);
-    setPasswordStatus("idle");
-
+    setPasswordStatus("sending");
+    
+    const result = await realAuthApi.requestPasswordReset(session.email);
+    
     if (!result.ok) {
-      if (result.reason === "incorrect_current_password") {
-        setPasswordError("Current password is incorrect.");
-      } else if (result.reason === "weak_password") {
-        setPasswordError("New password must be at least 8 characters.");
-      } else {
-        setPasswordError("Something went wrong. Please try again.");
-      }
+      setPasswordStatus("idle");
+      setPasswordError(result.message);
       return;
     }
-
-    setCurrentPassword("");
-    setNewPassword("");
+    
     setPasswordStatus("success");
-    setTimeout(() => setPasswordStatus("idle"), 2000);
-  }
-
-  function handleToggleApplicationUpdates() {
-    if (!session?.email) return;
-    const next = !emailApplicationUpdates;
-    setEmailApplicationUpdates(next);
-    settingsApi.savePreferences(session.email, {
-      emailApplicationUpdates: next,
-      emailJobMatches,
-    });
-  }
-
-  function handleToggleJobMatches() {
-    if (!session?.email) return;
-    const next = !emailJobMatches;
-    setEmailJobMatches(next);
-    settingsApi.savePreferences(session.email, {
-      emailApplicationUpdates,
-      emailJobMatches: next,
-    });
+    setTimeout(() => setPasswordStatus("idle"), 3000);
   }
 
   async function handleDeleteAccount() {
@@ -160,63 +67,31 @@ export default function SettingsPage() {
           Change password
         </h2>
 
-        <div className="mt-5 flex flex-col gap-3">
-          <PasswordInput
-            value={currentPassword}
-            onChange={setCurrentPassword}
-            placeholder="Current password"
-          />
-          <PasswordInput
-            value={newPassword}
-            onChange={setNewPassword}
-            placeholder="New password"
-          />
-        </div>
-
         {passwordError && (
           <p className="mt-3 text-sm text-red-500">{passwordError}</p>
         )}
 
         <button
           type="button"
-          onClick={handleUpdatePassword}
-          disabled={passwordStatus === "saving"}
+          onClick={handleRequestPasswordReset}
+          disabled={passwordStatus === "sending"}
           className={`mt-5 rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:opacity-50 ${manrope.className}`}
         >
-          {passwordStatus === "saving"
-            ? "Updating…"
+          {passwordStatus === "sending"
+            ? "Sending Request..."
             : passwordStatus === "success"
-              ? "Password updated ✓"
-              : "Update password"}
+              ? "Reset Link Sent ✓"
+              : "Request password reset"}
         </button>
       </div>
 
       {/* Notification preferences */}
-      <div className="shadow-[0_1px_2px_rgba(16,15,20,0.04),0_16px_32px_-24px_rgba(16,15,20,0.12)] rounded-2xl border border-gray-100 bg-white p-6">
-        <h2 className={`text-lg font-bold text-gray-900 ${manrope.className}`}>
-          Notification preferences
-        </h2>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <p className={`text-sm text-gray-700 ${plusJakartaSans.className}`}>
-              Email me about application updates
-            </p>
-            <PreferenceCheckbox
-              checked={emailApplicationUpdates}
-              onChange={handleToggleApplicationUpdates}
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <p className={`text-sm text-gray-700 ${plusJakartaSans.className}`}>
-              Email me new job matches
-            </p>
-            <PreferenceCheckbox
-              checked={emailJobMatches}
-              onChange={handleToggleJobMatches}
-            />
-          </div>
+      <div className="mt-8 border-t border-gray-100 pt-6">
+        <h2 className="text-sm font-bold text-gray-900 sm:text-base">Two-Factor Authentication (2FA)</h2>
+        <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+          <p className="text-sm text-gray-500">
+            Notification preferences is coming soon.
+          </p>
         </div>
       </div>
 
